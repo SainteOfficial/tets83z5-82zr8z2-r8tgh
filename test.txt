@@ -349,4 +349,190 @@ util.createUI = function()
     priorityFrame.Position = UDim2.new(0.05, 0, 0, 110)
     priorityFrame.BackgroundColor3 = config.ui.theme.background
     priorityFrame.BackgroundTransparency = 0.5
-    priorityFrame.BorderSizePix
+    priorityFrame.BorderSizePixel = 0
+    priorityFrame.Parent = mainFrame
+    
+    local priorityCorner = Instance.new("UICorner")
+    priorityCorner.CornerRadius = UDim.new(0, 4)
+    priorityCorner.Parent = priorityFrame
+    
+    local priorityOptions = {
+        {name = "Entfernung", value = "distance"},
+        {name = "Gesundheit", value = "health"},
+        {name = "Bedrohung", value = "threat"}
+    }
+    
+    local buttons = {}
+    local buttonWidth = 1 / #priorityOptions
+    
+    for i, option in ipairs(priorityOptions) do
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(buttonWidth, 0, 1, 0)
+        button.Position = UDim2.new(buttonWidth * (i-1), 0, 0, 0)
+        button.BackgroundColor3 = option.value == config.aimbot.targetPriority and config.ui.theme.accent or config.ui.theme.background
+        button.BackgroundTransparency = 0.7
+        button.TextColor3 = config.ui.theme.text
+        button.Text = option.name
+        button.TextSize = 12
+        button.Font = Enum.Font.Gotham
+        button.Parent = priorityFrame
+        buttons[option.value] = button
+        
+        button.MouseButton1Click:Connect(function()
+            config.aimbot.targetPriority = option.value
+            
+            for _, btn in pairs(buttons) do
+                btn.BackgroundColor3 = config.ui.theme.background
+            end
+            
+            button.BackgroundColor3 = config.ui.theme.accent
+            
+            -- Ziele neu sortieren
+            util.findZombies()
+            if #cache.targets > 0 then
+                cache.currentTarget = cache.targets[1]
+                util.updateTargetInfo()
+            end
+        end)
+    end
+    
+    -- Optionen
+    local optionsFrame = Instance.new("Frame")
+    optionsFrame.Size = UDim2.new(0.9, 0, 0, 60)
+    optionsFrame.Position = UDim2.new(0.05, 0, 0, 145)
+    optionsFrame.BackgroundColor3 = config.ui.theme.background
+    optionsFrame.BackgroundTransparency = 0.5
+    optionsFrame.BorderSizePixel = 0
+    optionsFrame.Parent = mainFrame
+    
+    local optionsCorner = Instance.new("UICorner")
+    optionsCorner.CornerRadius = UDim.new(0, 4)
+    optionsCorner.Parent = optionsFrame
+    
+    -- Checkbox-Funktion
+    local function createCheckbox(text, position, initialValue, callback)
+        local checkboxFrame = Instance.new("Frame")
+        checkboxFrame.Size = UDim2.new(1, 0, 0, 20)
+        checkboxFrame.Position = position
+        checkboxFrame.BackgroundTransparency = 1
+        checkboxFrame.Parent = optionsFrame
+        
+        local checkBox = Instance.new("Frame")
+        checkBox.Size = UDim2.new(0, 16, 0, 16)
+        checkBox.Position = UDim2.new(0, 5, 0.5, -8)
+        checkBox.BackgroundColor3 = config.ui.theme.background
+        checkBox.BorderColor3 = config.ui.theme.subText
+        checkBox.BorderSizePixel = 1
+        checkBox.Parent = checkboxFrame
+        
+        local checkBoxCorner = Instance.new("UICorner")
+        checkBoxCorner.CornerRadius = UDim.new(0, 2)
+        checkBoxCorner.Parent = checkBox
+        
+        local checkMark = Instance.new("Frame")
+        checkMark.Size = UDim2.new(0.7, 0, 0.7, 0)
+        checkMark.Position = UDim2.new(0.15, 0, 0.15, 0)
+        checkMark.BackgroundColor3 = config.ui.theme.accent
+        checkMark.BorderSizePixel = 0
+        checkMark.Visible = initialValue
+        checkMark.Parent = checkBox
+        
+        local checkMarkCorner = Instance.new("UICorner")
+        checkMarkCorner.CornerRadius = UDim.new(0, 1)
+        checkMarkCorner.Parent = checkMark
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.85, 0, 1, 0)
+        label.Position = UDim2.new(0.15, 0, 0, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = config.ui.theme.subText
+        label.Text = text
+        label.TextSize = 12
+        label.Font = Enum.Font.Gotham
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = checkboxFrame
+        
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(1, 0, 1, 0)
+        button.BackgroundTransparency = 1
+        button.Text = ""
+        button.Parent = checkboxFrame
+        
+        local checked = initialValue
+        button.MouseButton1Click:Connect(function()
+            checked = not checked
+            checkMark.Visible = checked
+            callback(checked)
+        end)
+        
+        return {
+            frame = checkboxFrame,
+            update = function(value)
+                checked = value
+                checkMark.Visible = checked
+            end
+        }
+    end
+    
+    -- Optionen erstellen
+    local headShotCheckbox = createCheckbox("Kopfschuss Focus", UDim2.new(0, 0, 0, 0), config.aimbot.headShotOnly, function(value)
+        config.aimbot.headShotOnly = value
+    end)
+    
+    local predictiveCheckbox = createCheckbox("Prädiktives Zielen", UDim2.new(0, 0, 0, 20), config.aimbot.predictiveAiming, function(value)
+        config.aimbot.predictiveAiming = value
+    end)
+    
+    local visualFeedbackCheckbox = createCheckbox("Visuelles Feedback", UDim2.new(0, 0, 0, 40), config.aimbot.visualFeedback, function(value)
+        config.aimbot.visualFeedback = value
+    end)
+    
+    -- Zielinformationen
+    local targetInfoFrame = Instance.new("Frame")
+    targetInfoFrame.Size = UDim2.new(0.9, 0, 0, 40)
+    targetInfoFrame.Position = UDim2.new(0.05, 0, 1, -45)
+    targetInfoFrame.BackgroundColor3 = config.ui.theme.background
+    targetInfoFrame.BackgroundTransparency = 0.5
+    targetInfoFrame.BorderSizePixel = 0
+    targetInfoFrame.Parent = mainFrame
+    cache.ui.targetInfoFrame = targetInfoFrame
+    
+    local targetInfoCorner = Instance.new("UICorner")
+    targetInfoCorner.CornerRadius = UDim.new(0, 4)
+    targetInfoCorner.Parent = targetInfoFrame
+    
+    local targetLabel = Instance.new("TextLabel")
+    targetLabel.Size = UDim2.new(1, 0, 0, 20)
+    targetLabel.Position = UDim2.new(0, 5, 0, 0)
+    targetLabel.BackgroundTransparency = 1
+    targetLabel.TextColor3 = config.ui.theme.subText
+    targetLabel.Text = "Aktuelles Ziel: Keins"
+    targetLabel.TextSize = 12
+    targetLabel.Font = Enum.Font.Gotham
+    targetLabel.TextXAlignment = Enum.TextXAlignment.Left
+    targetLabel.Parent = targetInfoFrame
+    cache.ui.targetLabel = targetLabel
+    
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Size = UDim2.new(0.5, 0, 0, 20)
+    distanceLabel.Position = UDim2.new(0, 5, 0, 20)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.TextColor3 = config.ui.theme.subText
+    distanceLabel.Text = "Entfernung: -"
+    distanceLabel.TextSize = 12
+    distanceLabel.Font = Enum.Font.Gotham
+    distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+    distanceLabel.Parent = targetInfoFrame
+    cache.ui.distanceLabel = distanceLabel
+    
+    local healthLabel = Instance.new("TextLabel")
+    healthLabel.Size = UDim2.new(0.5, 0, 0, 20)
+    healthLabel.Position = UDim2.new(0.5, 0, 0, 20)
+    healthLabel.BackgroundTransparency = 1
+    healthLabel.TextColor3 = config.ui.theme.subText
+    healthLabel.Text = "Gesundheit: -"
+    healthLabel.TextSize = 12
+    healthLabel.Font = Enum.Font.Gotham
+    healthLabel.TextXAlignment = Enum.TextXAlignment.Left
+    healthLabel.Parent = targetInfoFrame
+    cache.ui.healthLabel = healthLabel
