@@ -1,69 +1,69 @@
--- Highclass Zombie Aimbot Skript v3.0 mit Autofarm und schneller Schussgeschwindigkeit
+-- Highclass Zombie Aimbot v4.0
+-- Echtzeitüberwachung des Zielkopfs, dynamische Zielvalidierung und modernes, reaktionsschnelles GUI
 
 local player = game:GetService("Players").LocalPlayer
 local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Debris = game:GetService("Debris")
 
--- getNil-Funktion (entfernt Powerup-Modelle, die den Spieler kurzzeitig teleportieren können)
-local getNil = function(name, class)
-    for _, v in next, getnilinstances() or {} do
-        if v.ClassName == class and v.Name == name then
-            return v
+-- Hilfsfunktion, um Powerup-Modelle (die gelegentlich Teleports verursachen) zu entfernen
+local function removePowerups()
+    for _, v in pairs(getnilinstances() or {}) do
+        if v.ClassName == "Model" and v.Name == "Powerup" then
+            v:Destroy()
         end
     end
 end
 
--- Konfiguration (anpassbar nach Bedarf)
+-- Konfiguration (alle Werte sind anpassbar)
 local config = {
     aimbot = {
         enabled = false,
-        autofarm = false,           -- Automatischer Farm-Modus
-        targetPriority = "distance", -- "distance", "health", "threat"
-        maxDistance = 150,          -- Maximale Reichweite zur Zombiefindung
-        safeDistance = 50,          -- Abstand in Studs (Autofarm: Spieler über dem Zombie)
-        fireRate = 0.1,             -- Basis-Schussrate (wird dynamisch angepasst bei vielen Zombies)
-        bulletSpeed = 600,          -- Erhöhte Kugelgeschwindigkeit für schnellere Treffer
-        predictiveAiming = true,    -- Vorhersage des Zielorts (Lead Shot)
-        headShotOnly = true,        -- Ist aktiv, wird immer der Kopf anvisiert; sonst wird bei Verfügbarkeit der Torso gewählt
+        autofarm = false,            -- Aktiviert den Autofarm-Modus
+        targetPriority = "distance",  -- Optionen: "distance", "health", "threat"
+        maxDistance = 150,            -- Maximaldistanz zur Zombiefindung
+        safeDistance = 50,            -- Abstand (in Studs) über dem Zombie im Autofarm
+        fireRate = 0.1,               -- Basis-Schussrate (dynamisch angepasst bei vielen Zielen)
+        bulletSpeed = 600,            -- Erhöhte Kugelgeschwindigkeit für schnelle Treffer
+        predictiveAiming = true,      -- Vorhersage der Zielposition (Lead Shot)
+        headShotOnly = true,          -- Bei true: immer den Kopf anvisieren, ansonsten Torso falls vorhanden
         visualFeedback = true,
-        wallPenetration = true,     -- Schüsse gehen durch alle Hindernisse (Parts, Modelle etc.)
+        wallPenetration = true,       -- Schüsse gehen durch alle Hindernisse
         switchTargetKey = Enum.KeyCode.T,
         toggleKey = Enum.KeyCode.Z
     },
     ui = {
         theme = {
-            background = Color3.fromRGB(25, 25, 35),
-            backgroundTransparency = 0.2,
-            accent = Color3.fromRGB(45, 125, 70),
-            danger = Color3.fromRGB(180, 40, 40),
-            text = Color3.fromRGB(255, 255, 255),
-            subText = Color3.fromRGB(200, 200, 200)
-        },
-        draggable = true,
-        minimizable = true
+            background = Color3.fromRGB(20, 20, 30),
+            backgroundTransparency = 0.15,
+            accent = Color3.fromRGB(40, 150, 90),
+            danger = Color3.fromRGB(200, 50, 50),
+            text = Color3.fromRGB(240, 240, 240),
+            subText = Color3.fromRGB(180, 180, 180)
+        }
     }
 }
 
--- Interne Variablen & Cache
+-- Cache & interne Variablen
 local cache = {
     targets = {},
     currentTarget = nil,
     lastShot = 0,
-    connections = {},
     tweens = {},
     ui = {},
-    basePlate = nil,          -- Baseplate im Autofarm-Modus
+    basePlate = nil,
     lastTargetUpdate = 0
 }
 
--- Hilfsfunktionen
 local util = {}
 
--- Aufräumen von aktiven Tweens
-util.cleanupTweens = function()
+----------------------------------------
+-- Funktionen zur Zielbearbeitung
+----------------------------------------
+
+-- Bereinigt alle aktiven Tweens
+function util.cleanupTweens()
     for _, tween in pairs(cache.tweens) do
         if tween.IsPlaying then
             tween:Cancel()
@@ -72,29 +72,9 @@ util.cleanupTweens = function()
     cache.tweens = {}
 end
 
--- Entfernt Powerup-Modelle, die den Spieler stören könnten
-util.removePowerups = function()
-    for _, v in pairs(getnilinstances() or {}) do
-        if v.ClassName == "Model" and v.Name == "Powerup" then
-            v:Destroy()
-        end
-    end
-end
-
--- Sichtlinienprüfung (wird übersprungen, wenn wallPenetration aktiviert ist)
-util.isLineOfSightClear = function(origin, targetPosition)
-    if config.aimbot.wallPenetration then
-        return true
-    end
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.FilterDescendantsInstances = {player.Character, cache.currentTarget and cache.currentTarget.instance}
-    local result = workspace:Raycast(origin, (targetPosition - origin), rayParams)
-    return result == nil
-end
-
--- Wählt das anvisierte Körperteil – Kopf, wenn headShotOnly aktiv ist, ansonsten Torso falls vorhanden
-util.getAimTargetPart = function(zombie)
+-- Gibt das zu anvisierende Körperteil des Zombies zurück:
+-- Wenn headShotOnly aktiv ist, wird immer der "Head" genutzt, ansonsten wird "Torso" bzw. "UpperTorso" gewählt
+function util.getAimTargetPart(zombie)
     if not zombie then return nil end
     if config.aimbot.headShotOnly then
         return zombie:FindFirstChild("Head")
@@ -103,14 +83,14 @@ util.getAimTargetPart = function(zombie)
     end
 end
 
--- Zielfindung: Sucht Zombies im Ordner und erstellt eine sortierte Liste
--- Aktualisierung erfolgt alle 0,2 Sekunden, um Lag zu vermeiden
-util.findZombies = function()
-    local zombieFolder = workspace.Game.Zombies
+-- Aktualisiert in Echtzeit die Liste der Zombies
+function util.findZombies()
+    local zombieFolder = workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Zombies")
+    if not zombieFolder then return {} end
     local zombies = zombieFolder:GetChildren()
     local validTargets = {}
     
-    for _, zombie in pairs(zombies) do
+    for _, zombie in ipairs(zombies) do
         local part = util.getAimTargetPart(zombie)
         local humanoid = zombie:FindFirstChild("Humanoid")
         if part and humanoid and humanoid.Health > 0 then
@@ -141,15 +121,29 @@ util.findZombies = function()
     return validTargets
 end
 
--- Ermittelt die Waffe (zuerst im Backpack, dann im Character)
-util.getWeapon = function()
+-- Prüft in Echtzeit, ob der aktuelle Zombie noch im Ordner ist
+function util.validateCurrentTarget()
+    if cache.currentTarget and cache.currentTarget.instance then
+        local parent = cache.currentTarget.instance.Parent
+        if not (parent and parent.Name == "Zombies" and parent.Parent and parent.Parent.Name == "Game") then
+            cache.currentTarget = nil
+        end
+    end
+end
+
+----------------------------------------
+-- Waffen- & Schusslogik
+----------------------------------------
+
+-- Ermittelt die aktive Waffe (zuerst im Backpack, dann im Character)
+function util.getWeapon()
     if not player.Character then return nil end
-    for _, item in pairs(player.Backpack:GetChildren()) do
+    for _, item in ipairs(player.Backpack:GetChildren()) do
         if item:FindFirstChild("Event") then
             return item
         end
     end
-    for _, item in pairs(player.Character:GetChildren()) do
+    for _, item in ipairs(player.Character:GetChildren()) do
         if item:FindFirstChild("Event") then
             return item
         end
@@ -157,8 +151,8 @@ util.getWeapon = function()
     return nil
 end
 
--- Berechnet den Zielpunkt mit Vorhersage (Lead Shot) unter Verwendung des konfigurierten bulletSpeed
-util.calculateLeadShot = function(targetPart)
+-- Berechnet den Zielpunkt unter Berücksichtigung von Vorhersage (Lead Shot)
+function util.calculateLeadShot(targetPart)
     if not config.aimbot.predictiveAiming or not targetPart then 
         return targetPart.Position 
     end
@@ -169,46 +163,60 @@ util.calculateLeadShot = function(targetPart)
     return targetPart.Position + (headVelocity * timeToHit)
 end
 
--- Schussfunktion mit dynamischer Feuerverzögerung (fireRate wird angepasst, wenn viele Ziele vorhanden sind)
-util.fireAtTarget = function()
+-- Überprüft, ob die Sichtlinie zum Ziel frei ist (wird übersprungen, wenn wallPenetration aktiv ist)
+function util.isLineOfSightClear(origin, targetPosition)
+    if config.aimbot.wallPenetration then
+        return true
+    end
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    rayParams.FilterDescendantsInstances = {player.Character, cache.currentTarget and cache.currentTarget.instance}
+    local result = workspace:Raycast(origin, (targetPosition - origin), rayParams)
+    return result == nil
+end
+
+-- Schussfunktion: Feuert auf das aktuelle Ziel, wenn alle Bedingungen erfüllt sind
+function util.fireAtTarget()
     local now = tick()
     local effectiveFireRate = config.aimbot.fireRate
     if #cache.targets > 15 then
-        effectiveFireRate = config.aimbot.fireRate * 2 -- bei vielen Zielen weniger Schüsse
+        effectiveFireRate = config.aimbot.fireRate * 2
     end
     if now - cache.lastShot < effectiveFireRate then return end
-    
+
     local weapon = util.getWeapon()
     if not weapon or not weapon:FindFirstChild("Event") then return end
-    
-    local target = cache.currentTarget
-    if not target or not target.instance or not target.part then
+
+    util.validateCurrentTarget()
+    if not cache.currentTarget then
         local targets = util.findZombies()
         if #targets == 0 then return end
         cache.currentTarget = targets[1]
-        target = cache.currentTarget
     end
-    
-    local part = target.part
-    if not part then return end
-    
+
+    local targetPart = cache.currentTarget.part
+    if not targetPart then return end
+
     local origin = player.Character.HumanoidRootPart.Position
-    if not util.isLineOfSightClear(origin, part.Position) then
+    if not util.isLineOfSightClear(origin, targetPart.Position) then
         return
     end
-    
-    local aimPosition = util.calculateLeadShot(part)
-    local args = { aimPosition }
-    weapon.Event:FireServer(unpack(args))
+
+    local aimPosition = util.calculateLeadShot(targetPart)
+    weapon.Event:FireServer(aimPosition)
     cache.lastShot = now
-    
+
     if config.aimbot.visualFeedback then
-        util.createHitEffect(part.Position)
+        util.createHitEffect(targetPart.Position)
     end
 end
 
--- Visuelles Trefferfeedback: Erzeugt Partikeleffekte und animierte Effekte am getroffenen Punkt
-util.createHitEffect = function(position)
+----------------------------------------
+-- Visuelles Feedback & Zielindikator
+----------------------------------------
+
+-- Erzeugt einen visuellen Treffer-Effekt (Partikel, Tweening etc.)
+function util.createHitEffect(position)
     local effect = Instance.new("Part")
     effect.Size = Vector3.new(0.5, 0.5, 0.5)
     effect.Position = position
@@ -270,33 +278,13 @@ util.createHitEffect = function(position)
     Debris:AddItem(attachment, 0.5)
 end
 
--- Wechselt das Ziel (wählt das nächste in der Liste)
-util.switchTarget = function()
-    local targets = cache.targets
-    if #targets <= 1 then return end
-    local currentIndex = 1
-    for i, target in ipairs(targets) do
-        if target == cache.currentTarget then
-            currentIndex = i
-            break
-        end
-    end
-    local nextIndex = currentIndex % #targets + 1
-    cache.currentTarget = targets[nextIndex]
-    local part = util.getAimTargetPart(cache.currentTarget.instance)
-    if part and config.aimbot.visualFeedback then
-        util.createTargetIndicator(part)
-    end
-    util.updateTargetInfo()
-end
-
--- Erzeugt einen visuellen Indikator am Zielteil (z. B. rotes, drehendes Zielkreuz)
-util.createTargetIndicator = function(part)
+-- Erzeugt einen dynamischen Zielindikator (BillboardGui) am aktuellen Zielteil
+function util.createTargetIndicator(targetPart)
     local indicator = Instance.new("BillboardGui")
     indicator.Size = UDim2.new(0, 50, 0, 50)
     indicator.AlwaysOnTop = true
-    indicator.Adornee = part
-    indicator.Parent = part
+    indicator.Adornee = targetPart
+    indicator.Parent = targetPart
     
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, 0, 1, 0)
@@ -318,8 +306,8 @@ util.createTargetIndicator = function(part)
     Debris:AddItem(indicator, 3)
 end
 
--- Aktualisiert die Ziel-Information im GUI
-util.updateTargetInfo = function()
+-- Aktualisiert die GUI-Zielinformationen in Echtzeit
+function util.updateTargetInfo()
     if cache.currentTarget and cache.currentTarget.instance and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         local part = util.getAimTargetPart(cache.currentTarget.instance)
         local humanoid = cache.currentTarget.instance:FindFirstChild("Humanoid")
@@ -336,8 +324,12 @@ util.updateTargetInfo = function()
     end
 end
 
--- Autofarm-Logik: Positioniert den Spieler sicher über dem aktuellen Zombie
-util.autoFarmLogic = function()
+----------------------------------------
+-- Autofarm-Funktionalität
+----------------------------------------
+
+-- Positioniert den Spieler in Echtzeit sicher über dem Zombie und platziert/aktualisiert eine Baseplate
+function util.autoFarmLogic()
     if cache.currentTarget and cache.currentTarget.instance then
         local part = util.getAimTargetPart(cache.currentTarget.instance)
         if part then
@@ -346,7 +338,6 @@ util.autoFarmLogic = function()
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 player.Character.HumanoidRootPart.CFrame = CFrame.new(newPos)
             end
-            -- Baseplate erstellen oder aktualisieren
             if not cache.basePlate then
                 local plate = Instance.new("Part")
                 plate.Name = "AutofarmBasePlate"
@@ -354,7 +345,7 @@ util.autoFarmLogic = function()
                 plate.Anchored = true
                 plate.CanCollide = true
                 plate.Position = part.Position + Vector3.new(0, safeDistance + 5, 0)
-                plate.Transparency = 0.5
+                plate.Transparency = 0.4
                 plate.Color = Color3.fromRGB(100, 100, 100)
                 plate.Parent = workspace
                 cache.basePlate = plate
@@ -365,339 +356,215 @@ util.autoFarmLogic = function()
     end
 end
 
--- Erstellung des GUI – umfangreiches Fenster mit allen Optionen
-util.createUI = function()
+----------------------------------------
+-- Modernes GUI
+----------------------------------------
+
+function util.createUI()
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "ZombieAimbotUI"
     ScreenGui.ResetOnSpawn = false
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.Parent = player.PlayerGui
     cache.ui.screenGui = ScreenGui
-    
+
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 240, 0, 260)
-    mainFrame.Position = UDim2.new(0.85, 0, 0.1, 0)
+    mainFrame.Size = UDim2.new(0, 260, 0, 320)
+    mainFrame.Position = UDim2.new(0.75, 0, 0.1, 0)
     mainFrame.BackgroundColor3 = config.ui.theme.background
     mainFrame.BackgroundTransparency = config.ui.theme.backgroundTransparency
     mainFrame.BorderSizePixel = 0
     mainFrame.Parent = ScreenGui
     cache.ui.mainFrame = mainFrame
-    
-    local uiCorner = Instance.new("UICorner")
-    uiCorner.CornerRadius = UDim.new(0, 8)
-    uiCorner.Parent = mainFrame
-    
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = mainFrame
+
     local titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1, 0, 0, 30)
+    titleBar.Size = UDim2.new(1, 0, 0, 40)
     titleBar.BackgroundColor3 = config.ui.theme.accent
-    titleBar.BackgroundTransparency = 0.2
+    titleBar.BackgroundTransparency = 0.1
     titleBar.BorderSizePixel = 0
     titleBar.Parent = mainFrame
     cache.ui.titleBar = titleBar
-    
-    local titleCorner = Instance.new("UICorner")
-    titleCorner.CornerRadius = UDim.new(0, 8)
-    titleCorner.Parent = titleBar
-    
-    local titleBottomCover = Instance.new("Frame")
-    titleBottomCover.Size = UDim2.new(1, 0, 0, 10)
-    titleBottomCover.Position = UDim2.new(0, 0, 1, -10)
-    titleBottomCover.BackgroundColor3 = config.ui.theme.accent
-    titleBottomCover.BackgroundTransparency = 0.2
-    titleBottomCover.BorderSizePixel = 0
-    titleBottomCover.Parent = titleBar
-    
+
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0.7, 0, 1, 0)
-    title.Position = UDim2.new(0, 10, 0, 0)
+    title.Size = UDim2.new(0.8, 0, 1, 0)
+    title.Position = UDim2.new(0.05, 0, 0, 0)
     title.BackgroundTransparency = 1
     title.TextColor3 = config.ui.theme.text
-    title.Text = "Ultimate Zombie Aimbot"
-    title.TextSize = 16
+    title.Text = "Zombie Aimbot v4.0"
     title.Font = Enum.Font.GothamBold
-    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextScaled = true
     title.Parent = titleBar
-    
-    local minimizeButton = Instance.new("TextButton")
-    minimizeButton.Size = UDim2.new(0, 25, 0, 25)
-    minimizeButton.Position = UDim2.new(1, -30, 0, 2)
-    minimizeButton.BackgroundColor3 = config.ui.theme.background
-    minimizeButton.BackgroundTransparency = 0.5
-    minimizeButton.TextColor3 = config.ui.theme.text
-    minimizeButton.Text = "-"
-    minimizeButton.TextSize = 20
-    minimizeButton.Font = Enum.Font.GothamBold
-    minimizeButton.Parent = titleBar
-    cache.ui.minimizeButton = minimizeButton
-    
-    local minimizeCorner = Instance.new("UICorner")
-    minimizeCorner.CornerRadius = UDim.new(0, 4)
-    minimizeCorner.Parent = minimizeButton
-    
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-    toggleButton.Position = UDim2.new(0.05, 0, 0, 40)
-    toggleButton.BackgroundColor3 = config.ui.theme.accent
-    toggleButton.TextColor3 = config.ui.theme.text
-    toggleButton.Text = "Aktivieren [Z]"
-    toggleButton.TextSize = 16
-    toggleButton.Font = Enum.Font.GothamBold
-    toggleButton.Parent = mainFrame
-    cache.ui.toggleButton = toggleButton
-    
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 6)
-    toggleCorner.Parent = toggleButton
-    
-    local priorityLabel = Instance.new("TextLabel")
-    priorityLabel.Size = UDim2.new(0.9, 0, 0, 20)
-    priorityLabel.Position = UDim2.new(0.05, 0, 0, 90)
-    priorityLabel.BackgroundTransparency = 1
-    priorityLabel.TextColor3 = config.ui.theme.subText
-    priorityLabel.Text = "Zielpriorität:"
-    priorityLabel.TextSize = 14
-    priorityLabel.Font = Enum.Font.Gotham
-    priorityLabel.TextXAlignment = Enum.TextXAlignment.Left
-    priorityLabel.Parent = mainFrame
-    
-    local priorityFrame = Instance.new("Frame")
-    priorityFrame.Size = UDim2.new(0.9, 0, 0, 25)
-    priorityFrame.Position = UDim2.new(0.05, 0, 0, 110)
-    priorityFrame.BackgroundColor3 = config.ui.theme.background
-    priorityFrame.BackgroundTransparency = 0.5
-    priorityFrame.BorderSizePixel = 0
-    priorityFrame.Parent = mainFrame
-    
-    local priorityCorner = Instance.new("UICorner")
-    priorityCorner.CornerRadius = UDim.new(0, 4)
-    priorityCorner.Parent = priorityFrame
-    
-    local priorityOptions = {
-        {name = "Entfernung", value = "distance"},
-        {name = "Gesundheit", value = "health"},
-        {name = "Bedrohung", value = "threat"}
-    }
-    
-    local buttons = {}
-    local buttonWidth = 1 / #priorityOptions
-    
-    for i, option in ipairs(priorityOptions) do
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(buttonWidth, 0, 1, 0)
-        button.Position = UDim2.new(buttonWidth * (i-1), 0, 0, 0)
-        button.BackgroundColor3 = option.value == config.aimbot.targetPriority and config.ui.theme.accent or config.ui.theme.background
-        button.BackgroundTransparency = 0.7
-        button.TextColor3 = config.ui.theme.text
-        button.Text = option.name
-        button.TextSize = 12
-        button.Font = Enum.Font.Gotham
-        button.Parent = priorityFrame
-        buttons[option.value] = button
-        
-        button.MouseButton1Click:Connect(function()
-            config.aimbot.targetPriority = option.value
-            for _, btn in pairs(buttons) do
-                btn.BackgroundColor3 = config.ui.theme.background
-            end
-            button.BackgroundColor3 = config.ui.theme.accent
-            util.findZombies()
-            if #cache.targets > 0 then
-                cache.currentTarget = cache.targets[1]
-                util.updateTargetInfo()
-            end
-        end)
-    end
-    
-    local optionsFrame = Instance.new("Frame")
-    optionsFrame.Size = UDim2.new(0.9, 0, 0, 120)
-    optionsFrame.Position = UDim2.new(0.05, 0, 0, 145)
-    optionsFrame.BackgroundColor3 = config.ui.theme.background
-    optionsFrame.BackgroundTransparency = 0.5
-    optionsFrame.BorderSizePixel = 0
-    optionsFrame.Parent = mainFrame
-    
-    local optionsCorner = Instance.new("UICorner")
-    optionsCorner.CornerRadius = UDim.new(0, 4)
-    optionsCorner.Parent = optionsFrame
-    
-    local function createCheckbox(text, position, initialValue, callback)
-        local checkboxFrame = Instance.new("Frame")
-        checkboxFrame.Size = UDim2.new(1, 0, 0, 20)
-        checkboxFrame.Position = position
-        checkboxFrame.BackgroundTransparency = 1
-        checkboxFrame.Parent = optionsFrame
-        
-        local checkBox = Instance.new("Frame")
-        checkBox.Size = UDim2.new(0, 16, 0, 16)
-        checkBox.Position = UDim2.new(0, 5, 0.5, -8)
-        checkBox.BackgroundColor3 = config.ui.theme.background
-        checkBox.BorderColor3 = config.ui.theme.subText
-        checkBox.BorderSizePixel = 1
-        checkBox.Parent = checkboxFrame
-        
-        local checkBoxCorner = Instance.new("UICorner")
-        checkBoxCorner.CornerRadius = UDim.new(0, 2)
-        checkBoxCorner.Parent = checkBox
-        
-        local checkMark = Instance.new("Frame")
-        checkMark.Size = UDim2.new(0.7, 0, 0.7, 0)
-        checkMark.Position = UDim2.new(0.15, 0, 0.15, 0)
-        checkMark.BackgroundColor3 = config.ui.theme.accent
-        checkMark.BorderSizePixel = 0
-        checkMark.Visible = initialValue
-        checkMark.Parent = checkBox
-        
-        local checkMarkCorner = Instance.new("UICorner")
-        checkMarkCorner.CornerRadius = UDim.new(0, 1)
-        checkMarkCorner.Parent = checkMark
-        
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0.15, 0, 1, 0)
+    closeButton.Position = UDim2.new(0.85, 0, 0, 0)
+    closeButton.BackgroundTransparency = 1
+    closeButton.Text = "X"
+    closeButton.TextColor3 = config.ui.theme.danger
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextScaled = true
+    closeButton.Parent = titleBar
+    closeButton.MouseButton1Click:Connect(function()
+        mainFrame.Visible = not mainFrame.Visible
+    end)
+
+    -- Sektion für Einstellungen (Checkboxen und Buttons)
+    local settingsFrame = Instance.new("Frame")
+    settingsFrame.Size = UDim2.new(0.9, 0, 0.45, 0)
+    settingsFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
+    settingsFrame.BackgroundTransparency = 1
+    settingsFrame.Parent = mainFrame
+
+    -- Hilfsfunktion zum Erstellen einer Checkbox
+    local function createCheckbox(text, initialValue, callback)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0, 30)
+        frame.BackgroundTransparency = 1
+        frame.Parent = settingsFrame
+
+        local box = Instance.new("TextButton")
+        box.Size = UDim2.new(0, 25, 0, 25)
+        box.Position = UDim2.new(0, 0, 0, 2)
+        box.BackgroundColor3 = config.ui.theme.background
+        box.BorderSizePixel = 1
+        box.Text = initialValue and "X" or ""
+        box.TextColor3 = config.ui.theme.text
+        box.Font = Enum.Font.GothamBold
+        box.Parent = frame
+
         local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0.85, 0, 1, 0)
-        label.Position = UDim2.new(0.15, 0, 0, 0)
+        label.Size = UDim2.new(0.8, 0, 1, 0)
+        label.Position = UDim2.new(0.3, 0, 0, 0)
         label.BackgroundTransparency = 1
-        label.TextColor3 = config.ui.theme.subText
         label.Text = text
-        label.TextSize = 12
+        label.TextColor3 = config.ui.theme.subText
         label.Font = Enum.Font.Gotham
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = checkboxFrame
-        
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(1, 0, 1, 0)
-        button.BackgroundTransparency = 1
-        button.Text = ""
-        button.Parent = checkboxFrame
-        
-        local checked = initialValue
-        button.MouseButton1Click:Connect(function()
-            checked = not checked
-            checkMark.Visible = checked
-            callback(checked)
+        label.TextScaled = true
+        label.Parent = frame
+
+        box.MouseButton1Click:Connect(function()
+            initialValue = not initialValue
+            box.Text = initialValue and "X" or ""
+            callback(initialValue)
         end)
-        
-        return { frame = checkboxFrame, update = function(value) checked = value; checkMark.Visible = value end }
     end
-    
-    local headShotCheckbox = createCheckbox("Kopfschuss Focus", UDim2.new(0, 0, 0, 0), config.aimbot.headShotOnly, function(value)
+
+    createCheckbox("Kopfschuss Focus", config.aimbot.headShotOnly, function(value)
         config.aimbot.headShotOnly = value
     end)
-    
-    local predictiveCheckbox = createCheckbox("Prädiktives Zielen", UDim2.new(0, 0, 0, 20), config.aimbot.predictiveAiming, function(value)
+    createCheckbox("Prädiktives Zielen", config.aimbot.predictiveAiming, function(value)
         config.aimbot.predictiveAiming = value
     end)
-    
-    local visualFeedbackCheckbox = createCheckbox("Visuelles Feedback", UDim2.new(0, 0, 0, 40), config.aimbot.visualFeedback, function(value)
+    createCheckbox("Visuelles Feedback", config.aimbot.visualFeedback, function(value)
         config.aimbot.visualFeedback = value
     end)
-    
-    local autofarmCheckbox = createCheckbox("Autofarm", UDim2.new(0, 0, 0, 60), config.aimbot.autofarm, function(value)
+    createCheckbox("Autofarm", config.aimbot.autofarm, function(value)
         config.aimbot.autofarm = value
         if not value and cache.basePlate then
             cache.basePlate:Destroy()
             cache.basePlate = nil
         end
     end)
-    
-    local targetInfoFrame = Instance.new("Frame")
-    targetInfoFrame.Size = UDim2.new(0.9, 0, 0, 40)
-    targetInfoFrame.Position = UDim2.new(0.05, 0, 1, -45)
-    targetInfoFrame.BackgroundColor3 = config.ui.theme.background
-    targetInfoFrame.BackgroundTransparency = 0.5
-    targetInfoFrame.BorderSizePixel = 0
-    targetInfoFrame.Parent = mainFrame
-    cache.ui.targetInfoFrame = targetInfoFrame
-    
-    local targetInfoCorner = Instance.new("UICorner")
-    targetInfoCorner.CornerRadius = UDim.new(0, 4)
-    targetInfoCorner.Parent = targetInfoFrame
-    
+    createCheckbox("Wall Penetration", config.aimbot.wallPenetration, function(value)
+        config.aimbot.wallPenetration = value
+    end)
+
+    -- Bereich für Zielinformationen
+    local infoFrame = Instance.new("Frame")
+    infoFrame.Size = UDim2.new(0.9, 0, 0.15, 0)
+    infoFrame.Position = UDim2.new(0.05, 0, 0.65, 0)
+    infoFrame.BackgroundTransparency = 0.5
+    infoFrame.BackgroundColor3 = config.ui.theme.background
+    infoFrame.Parent = mainFrame
+
     local targetLabel = Instance.new("TextLabel")
-    targetLabel.Size = UDim2.new(1, 0, 0, 20)
-    targetLabel.Position = UDim2.new(0, 5, 0, 0)
+    targetLabel.Size = UDim2.new(1, 0, 0.33, 0)
+    targetLabel.Position = UDim2.new(0, 0, 0, 0)
     targetLabel.BackgroundTransparency = 1
-    targetLabel.TextColor3 = config.ui.theme.subText
     targetLabel.Text = "Ziel: Keins"
-    targetLabel.TextSize = 12
-    targetLabel.Font = Enum.Font.Gotham
-    targetLabel.TextXAlignment = Enum.TextXAlignment.Left
-    targetLabel.Parent = targetInfoFrame
+    targetLabel.TextColor3 = config.ui.theme.text
+    targetLabel.Font = Enum.Font.GothamBold
+    targetLabel.TextScaled = true
+    targetLabel.Parent = infoFrame
     cache.ui.targetLabel = targetLabel
-    
+
     local distanceLabel = Instance.new("TextLabel")
-    distanceLabel.Size = UDim2.new(0.5, 0, 0, 20)
-    distanceLabel.Position = UDim2.new(0, 5, 0, 20)
+    distanceLabel.Size = UDim2.new(1, 0, 0.33, 0)
+    distanceLabel.Position = UDim2.new(0, 0, 0.33, 0)
     distanceLabel.BackgroundTransparency = 1
-    distanceLabel.TextColor3 = config.ui.theme.subText
     distanceLabel.Text = "Entfernung: -"
-    distanceLabel.TextSize = 12
-    distanceLabel.Font = Enum.Font.Gotham
-    distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
-    distanceLabel.Parent = targetInfoFrame
+    distanceLabel.TextColor3 = config.ui.theme.text
+    distanceLabel.Font = Enum.Font.GothamBold
+    distanceLabel.TextScaled = true
+    distanceLabel.Parent = infoFrame
     cache.ui.distanceLabel = distanceLabel
-    
+
     local healthLabel = Instance.new("TextLabel")
-    healthLabel.Size = UDim2.new(0.5, 0, 0, 20)
-    healthLabel.Position = UDim2.new(0.5, 0, 0, 20)
+    healthLabel.Size = UDim2.new(1, 0, 0.33, 0)
+    healthLabel.Position = UDim2.new(0, 0, 0.66, 0)
     healthLabel.BackgroundTransparency = 1
-    healthLabel.TextColor3 = config.ui.theme.subText
     healthLabel.Text = "HP: -"
-    healthLabel.TextSize = 12
-    healthLabel.Font = Enum.Font.Gotham
-    healthLabel.TextXAlignment = Enum.TextXAlignment.Left
-    healthLabel.Parent = targetInfoFrame
+    healthLabel.TextColor3 = config.ui.theme.text
+    healthLabel.Font = Enum.Font.GothamBold
+    healthLabel.TextScaled = true
+    healthLabel.Parent = infoFrame
     cache.ui.healthLabel = healthLabel
 end
 
--- UI erstellen
 util.createUI()
 
--- UI-Buttons: Toggle und Minimieren
-cache.ui.toggleButton.MouseButton1Click:Connect(function()
-    config.aimbot.enabled = not config.aimbot.enabled
-    if config.aimbot.enabled then
-        cache.ui.toggleButton.Text = "Deaktivieren [Z]"
-    else
-        cache.ui.toggleButton.Text = "Aktivieren [Z]"
-    end
-end)
+----------------------------------------
+-- Event-Handler & Hauptloop
+----------------------------------------
 
-cache.ui.minimizeButton.MouseButton1Click:Connect(function()
-    cache.ui.mainFrame.Visible = not cache.ui.mainFrame.Visible
-end)
-
--- Tasten-Events: Aimbot-Umschaltung und Zielwechsel
+-- Tasten-Events: Umschalten und Zielwechsel
 UIS.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == config.aimbot.toggleKey then
         config.aimbot.enabled = not config.aimbot.enabled
-        if config.aimbot.enabled then
-            cache.ui.toggleButton.Text = "Deaktivieren [Z]"
-        else
-            cache.ui.toggleButton.Text = "Aktivieren [Z]"
-        end
+        cache.ui.titleBar.Text = config.aimbot.enabled and "Aimbot Aktiviert" or "Aimbot Deaktiviert"
     elseif input.KeyCode == config.aimbot.switchTargetKey then
-        util.switchTarget()
+        -- Schaltet sofort zum nächsten Ziel
+        if #cache.targets > 1 then
+            local currentIndex = 1
+            for i, target in ipairs(cache.targets) do
+                if target == cache.currentTarget then
+                    currentIndex = i
+                    break
+                end
+            end
+            local nextIndex = currentIndex % #cache.targets + 1
+            cache.currentTarget = cache.targets[nextIndex]
+        end
     end
 end)
 
--- Hauptloop: Führt alle Funktionen aus – Zielfindung, Schießen, Autofarm und Powerup-Entfernung
+-- Hauptloop: Aktualisiert in Echtzeit alle Zielinformationen, feuert und führt Autofarm sowie Powerup-Entfernung aus
 RS.Heartbeat:Connect(function(dt)
     if config.aimbot.enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        local currentTime = tick()
-        if currentTime - cache.lastTargetUpdate > 0.2 then
+        local now = tick()
+        if now - cache.lastTargetUpdate > 0.2 then
             util.findZombies()
-            cache.lastTargetUpdate = currentTime
+            cache.lastTargetUpdate = now
         end
+
+        -- Überprüfe in Echtzeit, ob das aktuelle Ziel noch gültig ist (z.B. ob es noch im Ordner ist)
+        util.validateCurrentTarget()
         if #cache.targets > 0 then
             if not cache.currentTarget then
                 cache.currentTarget = cache.targets[1]
             end
             util.fireAtTarget()
         end
+
         util.updateTargetInfo()
         if config.aimbot.autofarm then
             util.autoFarmLogic()
         end
-        util.removePowerups()
+        removePowerups()
     end
 end)
