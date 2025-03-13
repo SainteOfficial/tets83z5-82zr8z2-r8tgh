@@ -1,0 +1,178 @@
+-- Zombie Aimbot Script
+local player = game:GetService("Players").LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+
+-- Create GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = player.PlayerGui
+ScreenGui.ResetOnSpawn = false
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 200, 0, 100)
+Frame.Position = UDim2.new(0.85, 0, 0.1, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.BorderSizePixel = 0
+Frame.BackgroundTransparency = 0.3
+Frame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = Frame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Text = "Zombie Aimbot"
+Title.TextSize = 18
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Frame
+
+local Button = Instance.new("TextButton")
+Button.Size = UDim2.new(0.8, 0, 0, 40)
+Button.Position = UDim2.new(0.1, 0, 0.5, 0)
+Button.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+Button.Text = "Enable"
+Button.TextSize = 16
+Button.Font = Enum.Font.GothamBold
+Button.Parent = Frame
+
+local UICorner2 = Instance.new("UICorner")
+UICorner2.CornerRadius = UDim.new(0, 6)
+UICorner2.Parent = Button
+
+-- Variables
+local enabled = false
+local currentTarget = nil
+local connection = nil
+
+-- Find weapon
+local function getWeapon()
+    if player.Character then
+        for _, weapon in pairs(player.Character:GetChildren()) do
+            if weapon:FindFirstChild("Event") then
+                return weapon
+            end
+        end
+    end
+    return nil
+end
+
+-- Get closest zombie
+local function getClosestZombie()
+    local zombies = workspace.Game.Zombies:GetChildren()
+    local closestZombie = nil
+    local minDistance = math.huge
+    
+    for _, zombie in pairs(zombies) do
+        local head = zombie:FindFirstChild("Head")
+        if head then
+            local distance = (player.Character.HumanoidRootPart.Position - head.Position).Magnitude
+            if distance < minDistance then
+                minDistance = distance
+                closestZombie = zombie
+            end
+        end
+    end
+    
+    return closestZombie
+end
+
+-- Main function
+local function autoShoot()
+    local weapon = getWeapon()
+    if not weapon then return end
+    
+    local zombie = getClosestZombie()
+    if not zombie then return end
+    
+    local head = zombie:FindFirstChild("Head")
+    if not head then return end
+    
+    -- Fire remote with head position
+    local args = {
+        [1] = head.Position
+    }
+    weapon.Event:FireServer(unpack(args))
+    
+    -- Update current target
+    currentTarget = zombie
+end
+
+-- Toggle function
+local function toggleAimbot()
+    enabled = not enabled
+    
+    if enabled then
+        Button.Text = "Disable"
+        Button.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+        
+        -- Start auto shooting
+        connection = RS.Heartbeat:Connect(function()
+            -- Check if current target still exists
+            if currentTarget and currentTarget:FindFirstChild("Head") then
+                autoShoot()
+            else
+                currentTarget = nil
+                autoShoot()
+            end
+        end)
+    else
+        Button.Text = "Enable"
+        Button.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
+        
+        -- Stop auto shooting
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+        
+        currentTarget = nil
+    end
+end
+
+-- Connect button
+Button.MouseButton1Click:Connect(toggleAimbot)
+
+-- Make GUI draggable
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = Frame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Notify when script is loaded
+print("Zombie Aimbot loaded! Click the button to enable/disable.")
