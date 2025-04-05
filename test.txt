@@ -1,6 +1,8 @@
 --[[
     Remote Spy (RSpY) für Roblox
     Zeigt alle RemoteEvents und RemoteFunctions an, mit Ausnahme der ignorierten Events
+    
+    FIXED VERSION - Uses namecall method instead of direct hooking
 ]]
 
 -- Einstellungen
@@ -178,40 +180,23 @@ local function addToLogs(remoteType, remote, args, returnValue)
     end
 end
 
--- Hooks für RemoteEvents und RemoteFunctions
-local function hookRemoteEvent(remote)
+-- Nur noch für die Aufzeichnung der gefundenen Remotes verwenden
+local function recordRemoteEvent(remote)
     if isRemoteIgnored(remote) then return end
-    
-    local originalFireServer = remote.FireServer
-    remote.FireServer = function(self, ...)
-        local args = {...}
-        addToLogs("RemoteEvent", remote, args)
-        return originalFireServer(self, ...)
-    end
-    
     RSpY.remotes[remote] = "RemoteEvent"
 end
 
-local function hookRemoteFunction(remote)
+local function recordRemoteFunction(remote)
     if isRemoteIgnored(remote) then return end
-    
-    local originalInvokeServer = remote.InvokeServer
-    remote.InvokeServer = function(self, ...)
-        local args = {...}
-        local returnValue = {originalInvokeServer(self, ...)}
-        addToLogs("RemoteFunction", remote, args, returnValue)
-        return unpack(returnValue)
-    end
-    
     RSpY.remotes[remote] = "RemoteFunction"
 end
 
 -- Hook für neue Remotes
 local function hookNewRemote(instance)
     if instance:IsA("RemoteEvent") then
-        hookRemoteEvent(instance)
+        recordRemoteEvent(instance)
     elseif instance:IsA("RemoteFunction") then
-        hookRemoteFunction(instance)
+        recordRemoteFunction(instance)
     end
 end
 
@@ -555,6 +540,27 @@ function RSpY.updateRemotesList()
     end
 end
 
+-- Namecall-Methode für das Abfangen von Remote-Ereignissen
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    
+    if (method == "FireServer" or method == "fireServer") and self:IsA("RemoteEvent") then
+        if not isRemoteIgnored(self) then
+            addToLogs("RemoteEvent", self, args)
+        end
+    elseif (method == "InvokeServer" or method == "invokeServer") and self:IsA("RemoteFunction") then
+        if not isRemoteIgnored(self) then
+            local returnValue = {oldNamecall(self, ...)}
+            addToLogs("RemoteFunction", self, args, returnValue)
+            return unpack(returnValue)
+        end
+    end
+    
+    return oldNamecall(self, ...)
+end)
+
 -- Initialisierung
 function RSpY.init()
     print("Remote Spy (RSpY) wird gestartet...")
@@ -564,13 +570,13 @@ function RSpY.init()
         RSpY.gui = createGUI()
     end
     
-    -- Vorhandene Remotes finden und hooking
+    -- Vorhandene Remotes finden und aufzeichnen
     local function scanInstance(instance)
         for _, child in ipairs(instance:GetChildren()) do
             if child:IsA("RemoteEvent") then
-                hookRemoteEvent(child)
+                recordRemoteEvent(child)
             elseif child:IsA("RemoteFunction") then
-                hookRemoteFunction(child)
+                recordRemoteFunction(child)
             end
             
             scanInstance(child)
@@ -586,7 +592,7 @@ function RSpY.init()
         end
     end)
     
-    print("Remote Spy (RSpY) wurde gestartet! " .. tostring(table.getn(RSpY.remotes)) .. " Remotes wurden gefunden.")
+    print("Remote Spy (RSpY) wurde gestartet! " .. #RSpY.remotes .. " Remotes wurden gefunden.")
 end
 
 -- Starte Remote Spy
