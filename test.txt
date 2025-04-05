@@ -1,8 +1,8 @@
 --[[
-    Remote Spy (RSpY) für Roblox
-    Zeigt alle RemoteEvents und RemoteFunctions an, mit Ausnahme der ignorierten Events
-    
-    FIXED VERSION - Uses namecall method instead of direct hooking
+    Improved Remote Spy (RSpY) für Roblox
+    Überprüft alle 0.03 Sekunden auf neue RemoteEvents und RemoteFunctions
+    Zeigt detaillierte Informationen mit Zeitstempeln an
+    Verbessertes Design und Fehlerbehandlung
 ]]
 
 -- Einstellungen
@@ -13,8 +13,7 @@ local settings = {
     },
     saveRemoteCalls = true,       -- Speichert alle Remote-Aufrufe
     maxSavedCalls = 100,          -- Maximale Anzahl gespeicherter Aufrufe
-    guiEnabled = true,            -- GUI für Benutzeroberfläche aktivieren
-    printToConsole = true,        -- Ausgabe in der Konsole anzeigen
+    refreshRate = 0.03,           -- Überprüft alle 0.03 Sekunden auf neue Remotes
     includeArguments = true       -- Argumente der Remote-Aufrufe anzeigen
 }
 
@@ -24,9 +23,12 @@ RSpY.remotes = {}
 RSpY.logs = {}
 RSpY.gui = nil
 RSpY.logCount = 0
+RSpY.remoteCount = 0
 
 -- Hilfsfunktionen
 local function getRemotePath(remote)
+    if not remote or not remote.Parent then return "Ungültiger Remote" end
+    
     local path = remote.Name
     local parent = remote.Parent
     
@@ -43,11 +45,16 @@ local function isRemoteIgnored(remote)
     return settings.ignoreList[path] ~= nil
 end
 
+local function getFormattedTime()
+    local date = os.date("*t")
+    return string.format("%02d:%02d:%02d.%03d", date.hour, date.min, date.sec, tick() % 1 * 1000)
+end
+
 local function getTableString(tbl, depth)
     depth = depth or 0
     
     if depth > 3 then
-        return "{...}" -- Begrenze die Tiefe, um endlose Rekursion zu vermeiden
+        return "{...}" -- Begrenze die Tiefe
     end
     
     local result = "{"
@@ -130,7 +137,7 @@ local function getArgsString(args)
     return result
 end
 
--- Logs formatieren
+-- Logs formatieren und hinzufügen
 local function addToLogs(remoteType, remote, args, returnValue)
     if not settings.saveRemoteCalls then return end
     
@@ -138,7 +145,7 @@ local function addToLogs(remoteType, remote, args, returnValue)
     
     local log = {
         id = RSpY.logCount,
-        timestamp = os.time(),
+        timestamp = getFormattedTime(),
         type = remoteType,
         path = getRemotePath(remote),
         remote = remote,
@@ -156,387 +163,376 @@ local function addToLogs(remoteType, remote, args, returnValue)
     
     table.insert(RSpY.logs, log)
     
-    if settings.printToConsole then
-        local argsStr = ""
-        if settings.includeArguments and args then
-            for i, arg in ipairs(args) do
-                argsStr = argsStr .. formatValue(arg)
-                if i < #args then
-                    argsStr = argsStr .. ", "
+    -- Log in der Konsole anzeigen
+    local argsStr = ""
+    if settings.includeArguments and args then
+        for i, arg in ipairs(args) do
+            if i > 1 then argsStr = argsStr .. ", " end
+            
+            if type(arg) == "table" then
+                argsStr = argsStr .. "{...}"
+            elseif type(arg) == "string" then
+                if #arg > 20 then
+                    argsStr = argsStr .. '"' .. string.sub(arg, 1, 20) .. '..."'
+                else
+                    argsStr = argsStr .. '"' .. arg .. '"'
                 end
+            else
+                argsStr = argsStr .. tostring(arg)
             end
-        end
-        
-        print(string.format("[RSpY] %s: %s(%s)", remoteType, log.path, argsStr))
-        
-        if returnValue ~= nil then
-            print("   → Return:", formatValue(returnValue))
+            
+            if i >= 3 and #args > 3 then
+                argsStr = argsStr .. ", ... [" .. (#args - 3) .. " mehr]"
+                break
+            end
         end
     end
     
-    -- GUI aktualisieren, falls vorhanden
-    if RSpY.gui and RSpY.gui.Frame.Visible then
-        RSpY.updateGUI()
-    end
+    print(string.format("[RSpY %s] %s: %s(%s)", log.timestamp, remoteType, log.path, argsStr))
+    
+    -- GUI aktualisieren
+    updateGUI()
 end
 
--- Nur noch für die Aufzeichnung der gefundenen Remotes verwenden
-local function recordRemoteEvent(remote)
-    if isRemoteIgnored(remote) then return end
-    RSpY.remotes[remote] = "RemoteEvent"
-end
-
-local function recordRemoteFunction(remote)
-    if isRemoteIgnored(remote) then return end
-    RSpY.remotes[remote] = "RemoteFunction"
-end
-
--- Hook für neue Remotes
-local function hookNewRemote(instance)
-    if instance:IsA("RemoteEvent") then
-        recordRemoteEvent(instance)
-    elseif instance:IsA("RemoteFunction") then
-        recordRemoteFunction(instance)
+-- Remote-Aufzeichnung
+local function recordRemote(remote, remoteType)
+    if not remote or isRemoteIgnored(remote) then return end
+    
+    if not RSpY.remotes[remote] then
+        RSpY.remotes[remote] = remoteType
+        RSpY.remoteCount = RSpY.remoteCount + 1
     end
 end
 
 -- GUI erstellen
 local function createGUI()
     local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "RSpYGUI"
+    ScreenGui.Name = "ImprovedRSpYGUI"
     ScreenGui.ResetOnSpawn = false
     ScreenGui.DisplayOrder = 999
     
-    local Frame = Instance.new("Frame")
-    Frame.Name = "Frame"
-    Frame.Size = UDim2.new(0.6, 0, 0.7, 0)
-    Frame.Position = UDim2.new(0.2, 0, 0.15, 0)
-    Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Frame.BorderSizePixel = 0
-    Frame.Visible = false
-    Frame.Parent = ScreenGui
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0.6, 0, 0.7, 0)
+    MainFrame.Position = UDim2.new(0.2, 0, 0.15, 0)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Visible = false
+    MainFrame.Parent = ScreenGui
     
+    -- Füge einen abgerundeten Rahmen hinzu
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 8)
+    UICorner.Parent = MainFrame
+    
+    -- Schatten-Effekt
+    local UIShadow = Instance.new("ImageLabel")
+    UIShadow.Name = "Shadow"
+    UIShadow.Size = UDim2.new(1, 20, 1, 20)
+    UIShadow.Position = UDim2.new(0, -10, 0, -10)
+    UIShadow.BackgroundTransparency = 1
+    UIShadow.Image = "rbxassetid://5554236805"
+    UIShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    UIShadow.ScaleType = Enum.ScaleType.Slice
+    UIShadow.SliceCenter = Rect.new(23, 23, 277, 277)
+    UIShadow.ImageTransparency = 0.4
+    UIShadow.ZIndex = -1
+    UIShadow.Parent = MainFrame
+    
+    -- Überschrift
     local Title = Instance.new("TextLabel")
     Title.Name = "Title"
-    Title.Size = UDim2.new(1, 0, 0.05, 0)
-    Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.TextSize = 16
-    Title.Text = "Remote Spy (RSpY)"
+    Title.Size = UDim2.new(1, 0, 0.06, 0)
+    Title.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    Title.TextColor3 = Color3.fromRGB(240, 240, 240)
+    Title.TextSize = 18
+    Title.Font = Enum.Font.SourceSansBold
+    Title.Text = "Improved Remote Spy"
     Title.BorderSizePixel = 0
-    Title.Parent = Frame
+    Title.Parent = MainFrame
     
+    local TitleCorner = Instance.new("UICorner")
+    TitleCorner.CornerRadius = UDim.new(0, 8)
+    TitleCorner.Parent = Title
+    
+    -- Schließen-Button
     local Close = Instance.new("TextButton")
     Close.Name = "Close"
-    Close.Size = UDim2.new(0.05, 0, 1, 0)
-    Close.Position = UDim2.new(0.95, 0, 0, 0)
-    Close.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    Close.Size = UDim2.new(0.05, 0, 0.8, 0)
+    Close.Position = UDim2.new(0.94, 0, 0.1, 0)
+    Close.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
     Close.TextColor3 = Color3.fromRGB(255, 255, 255)
     Close.Text = "X"
+    Close.Font = Enum.Font.SourceSansBold
+    Close.TextSize = 16
     Close.BorderSizePixel = 0
     Close.Parent = Title
-    Close.MouseButton1Click:Connect(function()
-        Frame.Visible = false
-    end)
     
-    local Tabs = Instance.new("Frame")
-    Tabs.Name = "Tabs"
-    Tabs.Size = UDim2.new(1, 0, 0.05, 0)
-    Tabs.Position = UDim2.new(0, 0, 0.05, 0)
-    Tabs.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    Tabs.BorderSizePixel = 0
-    Tabs.Parent = Frame
+    local CloseCorner = Instance.new("UICorner")
+    CloseCorner.CornerRadius = UDim.new(0, 4)
+    CloseCorner.Parent = Close
     
-    local LogsTab = Instance.new("TextButton")
-    LogsTab.Name = "LogsTab"
-    LogsTab.Size = UDim2.new(0.33, 0, 1, 0)
-    LogsTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    LogsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-    LogsTab.Text = "Logs"
-    LogsTab.BorderSizePixel = 0
-    LogsTab.Parent = Tabs
-    
-    local RemotesTab = Instance.new("TextButton")
-    RemotesTab.Name = "RemotesTab"
-    RemotesTab.Size = UDim2.new(0.33, 0, 1, 0)
-    RemotesTab.Position = UDim2.new(0.33, 0, 0, 0)
-    RemotesTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    RemotesTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-    RemotesTab.Text = "Remotes"
-    RemotesTab.BorderSizePixel = 0
-    RemotesTab.Parent = Tabs
-    
-    local SettingsTab = Instance.new("TextButton")
-    SettingsTab.Name = "SettingsTab"
-    SettingsTab.Size = UDim2.new(0.33, 0, 1, 0)
-    SettingsTab.Position = UDim2.new(0.66, 0, 0, 0)
-    SettingsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    SettingsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-    SettingsTab.Text = "Einstellungen"
-    SettingsTab.BorderSizePixel = 0
-    SettingsTab.Parent = Tabs
-    
-    local Content = Instance.new("Frame")
-    Content.Name = "Content"
-    Content.Size = UDim2.new(1, 0, 0.9, 0)
-    Content.Position = UDim2.new(0, 0, 0.1, 0)
-    Content.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Content.BorderSizePixel = 0
-    Content.Parent = Frame
-    
-    local LogsFrame = Instance.new("ScrollingFrame")
-    LogsFrame.Name = "LogsFrame"
-    LogsFrame.Size = UDim2.new(1, 0, 1, 0)
-    LogsFrame.BackgroundTransparency = 1
-    LogsFrame.ScrollBarThickness = 6
-    LogsFrame.Visible = true
-    LogsFrame.Parent = Content
+    -- Log-Container
+    local LogContainer = Instance.new("ScrollingFrame")
+    LogContainer.Name = "LogContainer"
+    LogContainer.Size = UDim2.new(1, -20, 0.94, -20)
+    LogContainer.Position = UDim2.new(0, 10, 0.06, 10)
+    LogContainer.BackgroundTransparency = 1
+    LogContainer.ScrollBarThickness = 6
+    LogContainer.ScrollingDirection = Enum.ScrollingDirection.Y
+    LogContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    LogContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+    LogContainer.Parent = MainFrame
     
     local UIListLayout = Instance.new("UIListLayout")
     UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    UIListLayout.Parent = LogsFrame
+    UIListLayout.Padding = UDim.new(0, 5)
+    UIListLayout.Parent = LogContainer
     
-    local RemotesFrame = Instance.new("ScrollingFrame")
-    RemotesFrame.Name = "RemotesFrame"
-    RemotesFrame.Size = UDim2.new(1, 0, 1, 0)
-    RemotesFrame.BackgroundTransparency = 1
-    RemotesFrame.ScrollBarThickness = 6
-    RemotesFrame.Visible = false
-    RemotesFrame.Parent = Content
-    
-    local RemotesUIListLayout = Instance.new("UIListLayout")
-    RemotesUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    RemotesUIListLayout.Parent = RemotesFrame
-    
-    local SettingsFrame = Instance.new("Frame")
-    SettingsFrame.Name = "SettingsFrame"
-    SettingsFrame.Size = UDim2.new(1, 0, 1, 0)
-    SettingsFrame.BackgroundTransparency = 1
-    SettingsFrame.Visible = false
-    SettingsFrame.Parent = Content
-    
+    -- Toggle-Button
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Name = "RSpYToggle"
-    ToggleButton.Size = UDim2.new(0, 100, 0, 30)
+    ToggleButton.Size = UDim2.new(0, 100, 0, 36)
     ToggleButton.Position = UDim2.new(0, 20, 0, 20)
-    ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    ToggleButton.TextColor3 = Color3.fromRGB(240, 240, 240)
     ToggleButton.Text = "RSpY"
-    ToggleButton.BorderSizePixel = 1
-    ToggleButton.BorderColor3 = Color3.fromRGB(100, 100, 100)
+    ToggleButton.Font = Enum.Font.SourceSansBold
+    ToggleButton.TextSize = 16
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.ZIndex = 10
     ToggleButton.Parent = ScreenGui
     
+    local ToggleButtonCorner = Instance.new("UICorner")
+    ToggleButtonCorner.CornerRadius = UDim.new(0, 6)
+    ToggleButtonCorner.Parent = ToggleButton
+    
+    -- Zähler-Label
+    local CounterLabel = Instance.new("TextLabel")
+    CounterLabel.Name = "Counter"
+    CounterLabel.Size = UDim2.new(0, 30, 0, 30)
+    CounterLabel.Position = UDim2.new(1, -15, 0, 3)
+    CounterLabel.BackgroundColor3 = Color3.fromRGB(60, 120, 190)
+    CounterLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CounterLabel.Text = "0"
+    CounterLabel.Font = Enum.Font.SourceSansBold
+    CounterLabel.TextSize = 14
+    CounterLabel.BorderSizePixel = 0
+    CounterLabel.ZIndex = 11
+    CounterLabel.Parent = ToggleButton
+    
+    local CounterCorner = Instance.new("UICorner")
+    CounterCorner.CornerRadius = UDim.new(1, 0) -- Kreis
+    CounterCorner.Parent = CounterLabel
+    
+    -- Event-Handler
+    Close.MouseButton1Click:Connect(function()
+        MainFrame.Visible = false
+    end)
+    
     ToggleButton.MouseButton1Click:Connect(function()
-        Frame.Visible = not Frame.Visible
+        MainFrame.Visible = not MainFrame.Visible
     end)
     
-    LogsTab.MouseButton1Click:Connect(function()
-        LogsTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        RemotesTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        SettingsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        LogsFrame.Visible = true
-        RemotesFrame.Visible = false
-        SettingsFrame.Visible = false
-    end)
+    -- Speichere Referenzen für später
+    local guiRefs = {
+        ScreenGui = ScreenGui,
+        MainFrame = MainFrame,
+        LogContainer = LogContainer,
+        CounterLabel = CounterLabel
+    }
     
-    RemotesTab.MouseButton1Click:Connect(function()
-        LogsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        RemotesTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        SettingsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        LogsFrame.Visible = false
-        RemotesFrame.Visible = true
-        SettingsFrame.Visible = false
-        RSpY.updateRemotesList()
-    end)
-    
-    SettingsTab.MouseButton1Click:Connect(function()
-        LogsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        RemotesTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        SettingsTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        LogsFrame.Visible = false
-        RemotesFrame.Visible = false
-        SettingsFrame.Visible = true
-    end)
-    
+    -- Füge GUI zum CoreGui hinzu
     ScreenGui.Parent = game:GetService("CoreGui")
     
-    return {
-        ScreenGui = ScreenGui,
-        Frame = Frame,
-        LogsFrame = LogsFrame,
-        RemotesFrame = RemotesFrame,
-        SettingsFrame = SettingsFrame
-    }
+    return guiRefs
 end
 
--- GUI-Funktionen
-function RSpY.updateGUI()
-    if not RSpY.gui or not RSpY.gui.LogsFrame then return end
+-- GUI aktualisieren
+function updateGUI()
+    if not RSpY.gui or not RSpY.gui.LogContainer then return end
     
-    -- Logs aktualisieren
-    local logsFrame = RSpY.gui.LogsFrame
-    for _, child in ipairs(logsFrame:GetChildren()) do
-        if child:IsA("Frame") then
-            child:Destroy()
+    -- Counter aktualisieren
+    RSpY.gui.CounterLabel.Text = tostring(RSpY.logCount)
+    
+    -- Überprüfe, ob es neue Logs gibt, die angezeigt werden müssen
+    local logContainer = RSpY.gui.LogContainer
+    local existingEntries = {}
+    
+    -- Bestehende Log-Einträge identifizieren
+    for _, child in ipairs(logContainer:GetChildren()) do
+        if child:IsA("Frame") and child.Name:match("^Log_") then
+            local logId = tonumber(child.Name:match("^Log_(%d+)"))
+            if logId then
+                existingEntries[logId] = child
+            end
         end
     end
     
+    -- Neue Logs hinzufügen
     for i = #RSpY.logs, 1, -1 do
         local log = RSpY.logs[i]
         
-        local logEntry = Instance.new("Frame")
-        logEntry.Name = "Log_" .. log.id
-        logEntry.Size = UDim2.new(1, 0, 0, 40)
-        logEntry.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        logEntry.BorderSizePixel = 1
-        logEntry.BorderColor3 = Color3.fromRGB(60, 60, 60)
-        logEntry.LayoutOrder = -log.id
-        
-        local typeColor
-        if log.type == "RemoteEvent" then
-            typeColor = Color3.fromRGB(255, 165, 0) -- Orange für Events
-        else
-            typeColor = Color3.fromRGB(0, 191, 255) -- Blau für Functions
-        end
-        
-        local typeLabel = Instance.new("TextLabel")
-        typeLabel.Size = UDim2.new(0.15, 0, 1, 0)
-        typeLabel.BackgroundTransparency = 1
-        typeLabel.TextColor3 = typeColor
-        typeLabel.Text = log.type
-        typeLabel.TextSize = 14
-        typeLabel.TextXAlignment = Enum.TextXAlignment.Center
-        typeLabel.Parent = logEntry
-        
-        local pathLabel = Instance.new("TextLabel")
-        pathLabel.Size = UDim2.new(0.85, 0, 0.5, 0)
-        pathLabel.Position = UDim2.new(0.15, 0, 0, 0)
-        pathLabel.BackgroundTransparency = 1
-        pathLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        pathLabel.Text = log.path
-        pathLabel.TextSize = 14
-        pathLabel.TextXAlignment = Enum.TextXAlignment.Left
-        pathLabel.Parent = logEntry
-        
-        local argsLabel = Instance.new("TextLabel")
-        argsLabel.Size = UDim2.new(0.85, 0, 0.5, 0)
-        argsLabel.Position = UDim2.new(0.15, 0, 0.5, 0)
-        argsLabel.BackgroundTransparency = 1
-        argsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-        
-        if log.args and #log.args > 0 then
-            local argsText = "Args: "
-            for i, arg in ipairs(log.args) do
-                if i > 1 then argsText = argsText .. ", " end
-                if type(arg) == "table" then
-                    argsText = argsText .. "{...}"
-                elseif type(arg) == "string" then
-                    if #arg > 20 then
-                        argsText = argsText .. '"' .. string.sub(arg, 1, 20) .. '..."'
-                    else
-                        argsText = argsText .. '"' .. arg .. '"'
-                    end
-                else
-                    argsText = argsText .. tostring(arg)
-                end
-                
-                if i >= 3 and #log.args > 3 then
-                    argsText = argsText .. ", ... [" .. (#log.args - 3) .. " more]"
-                    break
-                end
-            end
-            argsLabel.Text = argsText
-        else
-            argsLabel.Text = "Keine Argumente"
-        end
-        
-        argsLabel.TextSize = 12
-        argsLabel.TextXAlignment = Enum.TextXAlignment.Left
-        argsLabel.Parent = logEntry
-        
-        local copyButton = Instance.new("TextButton")
-        copyButton.Size = UDim2.new(0, 20, 0, 20)
-        copyButton.Position = UDim2.new(1, -25, 0, 10)
-        copyButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        copyButton.Text = "C"
-        copyButton.BorderSizePixel = 1
-        copyButton.BorderColor3 = Color3.fromRGB(100, 100, 100)
-        copyButton.Parent = logEntry
-        
-        copyButton.MouseButton1Click:Connect(function()
-            local code = ""
+        if not existingEntries[log.id] then
+            -- Neuer Log-Eintrag
+            local logEntry = Instance.new("Frame")
+            logEntry.Name = "Log_" .. log.id
+            logEntry.Size = UDim2.new(1, -10, 0, 60)
+            logEntry.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+            logEntry.BorderSizePixel = 0
+            logEntry.LayoutOrder = -log.id
+            
+            local EntryCorner = Instance.new("UICorner")
+            EntryCorner.CornerRadius = UDim.new(0, 6)
+            EntryCorner.Parent = logEntry
+            
+            -- Farbkodierung für Event/Function
+            local indicatorColor
             if log.type == "RemoteEvent" then
-                code = string.format('game:GetService("ReplicatedStorage"):WaitForChild("%s"):FireServer(%s)', log.path, getArgsString(log.args))
+                indicatorColor = Color3.fromRGB(255, 140, 50) -- Orange für Events
             else
-                code = string.format('game:GetService("ReplicatedStorage"):WaitForChild("%s"):InvokeServer(%s)', log.path, getArgsString(log.args))
+                indicatorColor = Color3.fromRGB(50, 180, 255) -- Blau für Functions
             end
-            setclipboard(code)
-        end)
-        
-        logEntry.Parent = logsFrame
-    end
-end
-
-function RSpY.updateRemotesList()
-    if not RSpY.gui or not RSpY.gui.RemotesFrame then return end
-    
-    -- Remotes-Liste aktualisieren
-    local remotesFrame = RSpY.gui.RemotesFrame
-    for _, child in ipairs(remotesFrame:GetChildren()) do
-        if child:IsA("Frame") then
-            child:Destroy()
+            
+            local typeIndicator = Instance.new("Frame")
+            typeIndicator.Name = "TypeIndicator"
+            typeIndicator.Size = UDim2.new(0, 4, 1, 0)
+            typeIndicator.BackgroundColor3 = indicatorColor
+            typeIndicator.BorderSizePixel = 0
+            typeIndicator.Parent = logEntry
+            
+            local IndicatorCorner = Instance.new("UICorner")
+            IndicatorCorner.CornerRadius = UDim.new(0, 6)
+            IndicatorCorner.Parent = typeIndicator
+            
+            -- Zeitstempel
+            local timeLabel = Instance.new("TextLabel")
+            timeLabel.Name = "TimeLabel"
+            timeLabel.Size = UDim2.new(0.2, 0, 0, 20)
+            timeLabel.Position = UDim2.new(0.02, 0, 0, 5)
+            timeLabel.BackgroundTransparency = 1
+            timeLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+            timeLabel.Text = log.timestamp
+            timeLabel.TextSize = 12
+            timeLabel.Font = Enum.Font.SourceSans
+            timeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            timeLabel.Parent = logEntry
+            
+            -- Typ
+            local typeLabel = Instance.new("TextLabel")
+            typeLabel.Name = "TypeLabel"
+            typeLabel.Size = UDim2.new(0.15, 0, 0, 20)
+            typeLabel.Position = UDim2.new(0.23, 0, 0, 5)
+            typeLabel.BackgroundTransparency = 1
+            typeLabel.TextColor3 = indicatorColor
+            typeLabel.Text = log.type:gsub("Remote", "")
+            typeLabel.TextSize = 14
+            typeLabel.Font = Enum.Font.SourceSansBold
+            typeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            typeLabel.Parent = logEntry
+            
+            -- Pfad
+            local pathLabel = Instance.new("TextLabel")
+            pathLabel.Name = "PathLabel"
+            pathLabel.Size = UDim2.new(0.6, 0, 0, 20)
+            pathLabel.Position = UDim2.new(0.38, 0, 0, 5)
+            pathLabel.BackgroundTransparency = 1
+            pathLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+            pathLabel.Text = log.path
+            pathLabel.TextSize = 14
+            pathLabel.Font = Enum.Font.SourceSans
+            pathLabel.TextXAlignment = Enum.TextXAlignment.Left
+            pathLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            pathLabel.Parent = logEntry
+            
+            -- Argumente
+            local argsLabel = Instance.new("TextLabel")
+            argsLabel.Name = "ArgsLabel"
+            argsLabel.Size = UDim2.new(0.98, 0, 0, 20)
+            argsLabel.Position = UDim2.new(0.02, 0, 0, 30)
+            argsLabel.BackgroundTransparency = 1
+            argsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            argsLabel.TextSize = 12
+            argsLabel.Font = Enum.Font.SourceSans
+            argsLabel.TextXAlignment = Enum.TextXAlignment.Left
+            argsLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            argsLabel.Parent = logEntry
+            
+            if log.args and #log.args > 0 then
+                local argsText = "Args: "
+                for i, arg in ipairs(log.args) do
+                    if i > 1 then argsText = argsText .. ", " end
+                    if type(arg) == "table" then
+                        argsText = argsText .. "{...}"
+                    elseif type(arg) == "string" then
+                        if #arg > 20 then
+                            argsText = argsText .. '"' .. string.sub(arg, 1, 20) .. '..."'
+                        else
+                            argsText = argsText .. '"' .. arg .. '"'
+                        end
+                    else
+                        argsText = argsText .. tostring(arg)
+                    end
+                    
+                    if i >= 3 and #log.args > 3 then
+                        argsText = argsText .. ", ... [" .. (#log.args - 3) .. " more]"
+                        break
+                    end
+                end
+                argsLabel.Text = argsText
+            else
+                argsLabel.Text = "Keine Argumente"
+            end
+            
+            -- Kopier-Button
+            local copyButton = Instance.new("TextButton")
+            copyButton.Name = "CopyButton"
+            copyButton.Size = UDim2.new(0, 24, 0, 24)
+            copyButton.Position = UDim2.new(1, -30, 0, 18)
+            copyButton.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+            copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            copyButton.Text = "📋"
+            copyButton.Font = Enum.Font.SourceSansBold
+            copyButton.TextSize = 14
+            copyButton.BorderSizePixel = 0
+            copyButton.Parent = logEntry
+            
+            local CopyCorner = Instance.new("UICorner")
+            CopyCorner.CornerRadius = UDim.new(0, 4)
+            CopyCorner.Parent = copyButton
+            
+            copyButton.MouseButton1Click:Connect(function()
+                local code = ""
+                if log.type == "RemoteEvent" then
+                    code = string.format('game:GetService("ReplicatedStorage"):WaitForChild("%s"):FireServer(%s)', log.path, getArgsString(log.args))
+                else
+                    code = string.format('game:GetService("ReplicatedStorage"):WaitForChild("%s"):InvokeServer(%s)', log.path, getArgsString(log.args))
+                end
+                setclipboard(code)
+            end)
+            
+            logEntry.Parent = logContainer
         end
     end
     
-    local sortedRemotes = {}
-    for remote, remoteType in pairs(RSpY.remotes) do
-        table.insert(sortedRemotes, {
-            remote = remote,
-            type = remoteType,
-            path = getRemotePath(remote)
-        })
+    -- Maximale Anzahl von Log-Einträgen begrenzen
+    local entries = {}
+    for _, child in ipairs(logContainer:GetChildren()) do
+        if child:IsA("Frame") and child.Name:match("^Log_") then
+            table.insert(entries, child)
+        end
     end
     
-    table.sort(sortedRemotes, function(a, b)
-        return a.path < b.path
+    table.sort(entries, function(a, b)
+        local idA = tonumber(a.Name:match("^Log_(%d+)"))
+        local idB = tonumber(b.Name:match("^Log_(%d+)"))
+        return idA > idB
     end)
     
-    for i, remoteInfo in ipairs(sortedRemotes) do
-        local remoteEntry = Instance.new("Frame")
-        remoteEntry.Name = "Remote_" .. i
-        remoteEntry.Size = UDim2.new(1, 0, 0, 30)
-        remoteEntry.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        remoteEntry.BorderSizePixel = 1
-        remoteEntry.BorderColor3 = Color3.fromRGB(60, 60, 60)
-        
-        local typeColor
-        if remoteInfo.type == "RemoteEvent" then
-            typeColor = Color3.fromRGB(255, 165, 0) -- Orange für Events
-        else
-            typeColor = Color3.fromRGB(0, 191, 255) -- Blau für Functions
+    for i = settings.maxSavedCalls + 1, #entries do
+        if entries[i] then
+            entries[i]:Destroy()
         end
-        
-        local typeLabel = Instance.new("TextLabel")
-        typeLabel.Size = UDim2.new(0.15, 0, 1, 0)
-        typeLabel.BackgroundTransparency = 1
-        typeLabel.TextColor3 = typeColor
-        typeLabel.Text = remoteInfo.type
-        typeLabel.TextSize = 14
-        typeLabel.TextXAlignment = Enum.TextXAlignment.Center
-        typeLabel.Parent = remoteEntry
-        
-        local pathLabel = Instance.new("TextLabel")
-        pathLabel.Size = UDim2.new(0.85, 0, 1, 0)
-        pathLabel.Position = UDim2.new(0.15, 0, 0, 0)
-        pathLabel.BackgroundTransparency = 1
-        pathLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        pathLabel.Text = remoteInfo.path
-        pathLabel.TextSize = 14
-        pathLabel.TextXAlignment = Enum.TextXAlignment.Left
-        pathLabel.Parent = remoteEntry
-        
-        remoteEntry.Parent = remotesFrame
     end
 end
 
@@ -547,10 +543,12 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local args = {...}
     
     if (method == "FireServer" or method == "fireServer") and self:IsA("RemoteEvent") then
+        recordRemote(self, "RemoteEvent")
         if not isRemoteIgnored(self) then
             addToLogs("RemoteEvent", self, args)
         end
     elseif (method == "InvokeServer" or method == "invokeServer") and self:IsA("RemoteFunction") then
+        recordRemote(self, "RemoteFunction")
         if not isRemoteIgnored(self) then
             local returnValue = {oldNamecall(self, ...)}
             addToLogs("RemoteFunction", self, args, returnValue)
@@ -563,36 +561,46 @@ end)
 
 -- Initialisierung
 function RSpY.init()
-    print("Remote Spy (RSpY) wird gestartet...")
+    print("Improved Remote Spy wird gestartet...")
     
-    -- GUI erstellen, wenn aktiviert
-    if settings.guiEnabled then
-        RSpY.gui = createGUI()
-    end
+    -- GUI erstellen
+    RSpY.gui = createGUI()
     
-    -- Vorhandene Remotes finden und aufzeichnen
+    -- Vorhandene Remotes scannen
     local function scanInstance(instance)
         for _, child in ipairs(instance:GetChildren()) do
             if child:IsA("RemoteEvent") then
-                recordRemoteEvent(child)
+                recordRemote(child, "RemoteEvent")
             elseif child:IsA("RemoteFunction") then
-                recordRemoteFunction(child)
+                recordRemote(child, "RemoteFunction")
             end
             
             scanInstance(child)
         end
     end
     
-    scanInstance(game:GetService("ReplicatedStorage"))
+    task.spawn(function()
+        scanInstance(game:GetService("ReplicatedStorage"))
+        
+        -- Auf neue Remotes überwachen
+        game.DescendantAdded:Connect(function(instance)
+            if instance:IsA("RemoteEvent") then
+                recordRemote(instance, "RemoteEvent")
+            elseif instance:IsA("RemoteFunction") then
+                recordRemote(instance, "RemoteFunction")
+            end
+        end)
+    end)
     
-    -- Auf neue Remotes überwachen
-    game.DescendantAdded:Connect(function(instance)
-        if instance:IsA("RemoteEvent") or instance:IsA("RemoteFunction") then
-            hookNewRemote(instance)
+    -- Timer für regelmäßige Überprüfungen
+    task.spawn(function()
+        while true do
+            task.wait(settings.refreshRate)
+            updateGUI()
         end
     end)
     
-    print("Remote Spy (RSpY) wurde gestartet! " .. #RSpY.remotes .. " Remotes wurden gefunden.")
+    print("Improved Remote Spy wurde gestartet! " .. RSpY.remoteCount .. " Remotes wurden gefunden.")
 end
 
 -- Starte Remote Spy
