@@ -1,538 +1,595 @@
--- Erweitertes Zombie Aimbot Skript v2.0
-local player = game:GetService("Players").LocalPlayer
-local UIS = game:GetService("UserInputService")
-local RS = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Debris = game:GetService("Debris")
+--[[
+    Remote Spy (RSpY) für Roblox
+    Zeigt alle RemoteEvents und RemoteFunctions an, mit Ausnahme der ignorierten Events
+]]
 
--- Konfiguration
-local config = {
-    aimbot = {
-        enabled = false,
-        targetPriority = "distance", -- "distance", "health", "threat"
-        maxDistance = 100,
-        fireRate = 0.1,
-        predictiveAiming = true,
-        headShotOnly = true,
-        visualFeedback = true,
-        switchTargetKey = Enum.KeyCode.T,
-        toggleKey = Enum.KeyCode.Z
+-- Einstellungen
+local settings = {
+    ignoreList = {
+        ["ReplicatedStorage.Events.HiNoob"] = true,
+        ["ReplicatedStorage.Events.Combat"] = true
     },
-    ui = {
-        theme = {
-            background = Color3.fromRGB(25, 25, 35),
-            backgroundTransparency = 0.2,
-            accent = Color3.fromRGB(45, 125, 70),
-            danger = Color3.fromRGB(180, 40, 40),
-            text = Color3.fromRGB(255, 255, 255),
-            subText = Color3.fromRGB(200, 200, 200)
-        },
-        draggable = true,
-        minimizable = true
-    }
+    saveRemoteCalls = true,       -- Speichert alle Remote-Aufrufe
+    maxSavedCalls = 100,          -- Maximale Anzahl gespeicherter Aufrufe
+    guiEnabled = true,            -- GUI für Benutzeroberfläche aktivieren
+    printToConsole = true,        -- Ausgabe in der Konsole anzeigen
+    includeArguments = true       -- Argumente der Remote-Aufrufe anzeigen
 }
 
--- Variablen
-local cache = {
-    targets = {},
-    currentTarget = nil,
-    weapon = nil,
-    lastShot = 0,
-    connections = {},
-    tweens = {},
-    ui = {}
-}
+-- Hauptklasse für Remote Spy
+local RSpY = {}
+RSpY.remotes = {}
+RSpY.logs = {}
+RSpY.gui = nil
+RSpY.logCount = 0
 
 -- Hilfsfunktionen
-local util = {}
-
--- Optimiertes Speichermanagement
-util.cleanupTweens = function()
-    for _, tween in pairs(cache.tweens) do
-        if tween.IsPlaying then
-            tween:Cancel()
-        end
+local function getRemotePath(remote)
+    local path = remote.Name
+    local parent = remote.Parent
+    
+    while parent and parent ~= game do
+        path = parent.Name .. "." .. path
+        parent = parent.Parent
     end
-    cache.tweens = {}
+    
+    return path
 end
 
--- Erweiterte Zielfindung
-util.findZombies = function()
-    local zombieFolder = workspace.Game.Zombies
-    local zombies = zombieFolder:GetChildren()
-    local validTargets = {}
+local function isRemoteIgnored(remote)
+    local path = getRemotePath(remote)
+    return settings.ignoreList[path] ~= nil
+end
+
+local function getTableString(tbl, depth)
+    depth = depth or 0
     
-    for _, zombie in pairs(zombies) do
-        local head = zombie:FindFirstChild("Head")
-        local humanoid = zombie:FindFirstChild("Humanoid")
+    if depth > 3 then
+        return "{...}" -- Begrenze die Tiefe, um endlose Rekursion zu vermeiden
+    end
+    
+    local result = "{"
+    local indent = string.rep("    ", depth + 1)
+    local closeIndent = string.rep("    ", depth)
+    local isFirst = true
+    
+    for k, v in pairs(tbl) do
+        if not isFirst then
+            result = result .. ","
+        end
         
-        if head and humanoid and humanoid.Health > 0 then
-            local distance = (player.Character.HumanoidRootPart.Position - head.Position).Magnitude
-            
-            if distance <= config.aimbot.maxDistance then
-                table.insert(validTargets, {
-                    instance = zombie,
-                    head = head,
-                    distance = distance,
-                    health = humanoid.Health,
-                    threat = distance / humanoid.Health -- Bedrohungswert: nähere und gesündere Zombies sind gefährlicher
-                })
+        result = result .. "\n" .. indent
+        
+        -- Schlüssel darstellen
+        if type(k) == "string" then
+            result = result .. '["' .. k .. '"] = '
+        else
+            result = result .. "[" .. tostring(k) .. "] = "
+        end
+        
+        -- Wert darstellen
+        if type(v) == "table" then
+            result = result .. getTableString(v, depth + 1)
+        elseif type(v) == "string" then
+            result = result .. '"' .. v .. '"'
+        elseif type(v) == "function" then
+            result = result .. "function(...)"
+        elseif type(v) == "userdata" then
+            result = result .. tostring(v)
+        else
+            result = result .. tostring(v)
+        end
+        
+        isFirst = false
+    end
+    
+    if not isFirst then
+        result = result .. "\n" .. closeIndent
+    end
+    
+    return result .. "}"
+end
+
+local function formatValue(value)
+    if type(value) == "table" then
+        return getTableString(value)
+    elseif type(value) == "string" then
+        return '"' .. value .. '"'
+    elseif type(value) == "function" then
+        return "function(...)"
+    elseif type(value) == "userdata" then
+        return tostring(value)
+    else
+        return tostring(value)
+    end
+end
+
+-- Hilfsfunktion für das Kopieren der Argumente
+local function getArgsString(args)
+    if not args or #args == 0 then
+        return ""
+    end
+    
+    local result = ""
+    for i, arg in ipairs(args) do
+        if i > 1 then
+            result = result .. ", "
+        end
+        
+        if type(arg) == "string" then
+            result = result .. '"' .. arg .. '"'
+        elseif type(arg) == "table" then
+            result = result .. getTableString(arg)
+        else
+            result = result .. tostring(arg)
+        end
+    end
+    
+    return result
+end
+
+-- Logs formatieren
+local function addToLogs(remoteType, remote, args, returnValue)
+    if not settings.saveRemoteCalls then return end
+    
+    RSpY.logCount = RSpY.logCount + 1
+    
+    local log = {
+        id = RSpY.logCount,
+        timestamp = os.time(),
+        type = remoteType,
+        path = getRemotePath(remote),
+        remote = remote,
+        args = settings.includeArguments and args or nil
+    }
+    
+    if returnValue ~= nil then
+        log.returnValue = returnValue
+    end
+    
+    -- Begrenze die Anzahl der Logs
+    while #RSpY.logs >= settings.maxSavedCalls do
+        table.remove(RSpY.logs, 1)
+    end
+    
+    table.insert(RSpY.logs, log)
+    
+    if settings.printToConsole then
+        local argsStr = ""
+        if settings.includeArguments and args then
+            for i, arg in ipairs(args) do
+                argsStr = argsStr .. formatValue(arg)
+                if i < #args then
+                    argsStr = argsStr .. ", "
+                end
             end
         end
-    end
-    
-    -- Sortiere Ziele nach Priorität
-    table.sort(validTargets, function(a, b)
-        if config.aimbot.targetPriority == "distance" then
-            return a.distance < b.distance
-        elseif config.aimbot.targetPriority == "health" then
-            return a.health > b.health
-        else -- "threat"
-            return a.threat < b.threat
-        end
-    end)
-    
-    cache.targets = validTargets
-    return validTargets
-end
-
--- Erweiterte Waffenerkennung
-util.getWeapon = function()
-    if not player.Character then return nil end
-    
-    -- Zuerst im Inventar prüfen
-    for _, item in pairs(player.Backpack:GetChildren()) do
-        if item:FindFirstChild("Event") then
-            return item
+        
+        print(string.format("[RSpY] %s: %s(%s)", remoteType, log.path, argsStr))
+        
+        if returnValue ~= nil then
+            print("   → Return:", formatValue(returnValue))
         end
     end
     
-    -- Dann in der Hand prüfen
-    for _, item in pairs(player.Character:GetChildren()) do
-        if item:FindFirstChild("Event") then
-            return item
-        end
-    end
-    
-    return nil
-end
-
--- Prädiktives Zielen
-util.calculateLeadShot = function(targetHead)
-    if not config.aimbot.predictiveAiming or not targetHead then return targetHead.Position end
-    
-    local headVelocity = targetHead.Velocity
-    local bulletSpeed = 300 -- Angenommene Geschwindigkeit der Projektile
-    local distance = (player.Character.HumanoidRootPart.Position - targetHead.Position).Magnitude
-    local timeToHit = distance / bulletSpeed
-    
-    return targetHead.Position + (headVelocity * timeToHit)
-end
-
--- Erweiterte Schussfunktion mit Cooldown
-util.fireAtTarget = function()
-    local now = tick()
-    if now - cache.lastShot < config.aimbot.fireRate then return end
-    
-    local weapon = util.getWeapon()
-    if not weapon or not weapon:FindFirstChild("Event") then return end
-    
-    local target = cache.currentTarget
-    if not target or not target.instance or not target.instance:FindFirstChild("Head") then
-        -- Ziel verloren, neues Ziel finden
-        local targets = util.findZombies()
-        if #targets == 0 then return end
-        cache.currentTarget = targets[1]
-        target = cache.currentTarget
-    end
-    
-    local head = target.instance:FindFirstChild("Head")
-    if not head then return end
-    
-    -- Berechne Zielposition mit Vorhersage
-    local aimPosition = util.calculateLeadShot(head)
-    
-    -- Schieße auf das Ziel
-    local args = {
-        [1] = aimPosition
-    }
-    weapon.Event:FireServer(unpack(args))
-    cache.lastShot = now
-    
-    -- Visuelles Feedback
-    if config.aimbot.visualFeedback then
-        util.createHitEffect(head.Position)
+    -- GUI aktualisieren, falls vorhanden
+    if RSpY.gui and RSpY.gui.Frame.Visible then
+        RSpY.updateGUI()
     end
 end
 
--- Visuelles Feedback für Treffer
-util.createHitEffect = function(position)
-    local effect = Instance.new("Part")
-    effect.Size = Vector3.new(0.5, 0.5, 0.5)
-    effect.Position = position
-    effect.Anchored = true
-    effect.CanCollide = false
-    effect.Material = Enum.Material.Neon
-    effect.Shape = Enum.PartType.Ball
-    effect.Color = Color3.fromRGB(255, 0, 0)
-    effect.Transparency = 0.3
-    effect.Parent = workspace.CurrentCamera
+-- Hooks für RemoteEvents und RemoteFunctions
+local function hookRemoteEvent(remote)
+    if isRemoteIgnored(remote) then return end
     
-    local tween = TweenService:Create(effect, TweenInfo.new(0.3), {Size = Vector3.new(0.1, 0.1, 0.1), Transparency = 1})
-    tween:Play()
-    table.insert(cache.tweens, tween)
-    
-    Debris:AddItem(effect, 0.3)
-end
-
--- Zielwechselfunktion
-util.switchTarget = function()
-    local targets = cache.targets
-    if #targets <= 1 then return end
-    
-    local currentIndex = 1
-    for i, target in ipairs(targets) do
-        if target == cache.currentTarget then
-            currentIndex = i
-            break
-        end
+    local originalFireServer = remote.FireServer
+    remote.FireServer = function(self, ...)
+        local args = {...}
+        addToLogs("RemoteEvent", remote, args)
+        return originalFireServer(self, ...)
     end
     
-    -- Zum nächsten Ziel wechseln
-    local nextIndex = currentIndex % #targets + 1
-    cache.currentTarget = targets[nextIndex]
+    RSpY.remotes[remote] = "RemoteEvent"
+end
+
+local function hookRemoteFunction(remote)
+    if isRemoteIgnored(remote) then return end
     
-    -- Visuelles Feedback
-    local head = cache.currentTarget.instance:FindFirstChild("Head")
-    if head and config.aimbot.visualFeedback then
-        util.createTargetIndicator(head)
+    local originalInvokeServer = remote.InvokeServer
+    remote.InvokeServer = function(self, ...)
+        local args = {...}
+        local returnValue = {originalInvokeServer(self, ...)}
+        addToLogs("RemoteFunction", remote, args, returnValue)
+        return unpack(returnValue)
     end
     
-    -- UI aktualisieren
-    util.updateTargetInfo()
+    RSpY.remotes[remote] = "RemoteFunction"
 end
 
--- Visueller Indikator für aktuelles Ziel
-util.createTargetIndicator = function(head)
-    local indicator = Instance.new("BillboardGui")
-    indicator.Size = UDim2.new(0, 50, 0, 50)
-    indicator.AlwaysOnTop = true
-    indicator.Adornee = head
-    indicator.Parent = head
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundTransparency = 1
-    frame.Parent = indicator
-    
-    local image = Instance.new("ImageLabel")
-    image.Size = UDim2.new(1, 0, 1, 0)
-    image.BackgroundTransparency = 1
-    image.Image = "rbxassetid://4950537421" -- Zielkreuz Asset ID
-    image.ImageColor3 = Color3.fromRGB(255, 0, 0)
-    image.ImageTransparency = 0.5
-    image.Parent = frame
-    
-    -- Animation
-    local tween = TweenService:Create(image, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1), {Rotation = 360})
-    tween:Play()
-    table.insert(cache.tweens, tween)
-    
-    Debris:AddItem(indicator, 3)
+-- Hook für neue Remotes
+local function hookNewRemote(instance)
+    if instance:IsA("RemoteEvent") then
+        hookRemoteEvent(instance)
+    elseif instance:IsA("RemoteFunction") then
+        hookRemoteFunction(instance)
+    end
 end
 
--- UI-Komponenten erstellen
-util.createUI = function()
-    -- ScreenGui erstellen
+-- GUI erstellen
+local function createGUI()
     local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "ZombieAimbotUI"
+    ScreenGui.Name = "RSpYGUI"
     ScreenGui.ResetOnSpawn = false
-    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.Parent = player.PlayerGui
-    cache.ui.screenGui = ScreenGui
+    ScreenGui.DisplayOrder = 999
     
-    -- Hauptframe
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 220, 0, 220)
-    mainFrame.Position = UDim2.new(0.85, 0, 0.1, 0)
-    mainFrame.BackgroundColor3 = config.ui.theme.background
-    mainFrame.BackgroundTransparency = config.ui.theme.backgroundTransparency
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = ScreenGui
-    cache.ui.mainFrame = mainFrame
+    local Frame = Instance.new("Frame")
+    Frame.Name = "Frame"
+    Frame.Size = UDim2.new(0.6, 0, 0.7, 0)
+    Frame.Position = UDim2.new(0.2, 0, 0.15, 0)
+    Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Frame.BorderSizePixel = 0
+    Frame.Visible = false
+    Frame.Parent = ScreenGui
     
-    local uiCorner = Instance.new("UICorner")
-    uiCorner.CornerRadius = UDim.new(0, 8)
-    uiCorner.Parent = mainFrame
+    local Title = Instance.new("TextLabel")
+    Title.Name = "Title"
+    Title.Size = UDim2.new(1, 0, 0.05, 0)
+    Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextSize = 16
+    Title.Text = "Remote Spy (RSpY)"
+    Title.BorderSizePixel = 0
+    Title.Parent = Frame
     
-    -- Titelleiste
-    local titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1, 0, 0, 30)
-    titleBar.BackgroundColor3 = config.ui.theme.accent
-    titleBar.BackgroundTransparency = 0.2
-    titleBar.BorderSizePixel = 0
-    titleBar.Parent = mainFrame
-    cache.ui.titleBar = titleBar
+    local Close = Instance.new("TextButton")
+    Close.Name = "Close"
+    Close.Size = UDim2.new(0.05, 0, 1, 0)
+    Close.Position = UDim2.new(0.95, 0, 0, 0)
+    Close.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    Close.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Close.Text = "X"
+    Close.BorderSizePixel = 0
+    Close.Parent = Title
+    Close.MouseButton1Click:Connect(function()
+        Frame.Visible = false
+    end)
     
-    local titleCorner = Instance.new("UICorner")
-    titleCorner.CornerRadius = UDim.new(0, 8)
-    titleCorner.Parent = titleBar
+    local Tabs = Instance.new("Frame")
+    Tabs.Name = "Tabs"
+    Tabs.Size = UDim2.new(1, 0, 0.05, 0)
+    Tabs.Position = UDim2.new(0, 0, 0.05, 0)
+    Tabs.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    Tabs.BorderSizePixel = 0
+    Tabs.Parent = Frame
     
-    local titleBottomCover = Instance.new("Frame")
-    titleBottomCover.Size = UDim2.new(1, 0, 0, 10)
-    titleBottomCover.Position = UDim2.new(0, 0, 1, -10)
-    titleBottomCover.BackgroundColor3 = config.ui.theme.accent
-    titleBottomCover.BackgroundTransparency = 0.2
-    titleBottomCover.BorderSizePixel = 0
-    titleBottomCover.Parent = titleBar
+    local LogsTab = Instance.new("TextButton")
+    LogsTab.Name = "LogsTab"
+    LogsTab.Size = UDim2.new(0.33, 0, 1, 0)
+    LogsTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    LogsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LogsTab.Text = "Logs"
+    LogsTab.BorderSizePixel = 0
+    LogsTab.Parent = Tabs
     
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0.7, 0, 1, 0)
-    title.Position = UDim2.new(0, 10, 0, 0)
-    title.BackgroundTransparency = 1
-    title.TextColor3 = config.ui.theme.text
-    title.Text = "Ultimate Zombie Aimbot"
-    title.TextSize = 16
-    title.Font = Enum.Font.GothamBold
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = titleBar
+    local RemotesTab = Instance.new("TextButton")
+    RemotesTab.Name = "RemotesTab"
+    RemotesTab.Size = UDim2.new(0.33, 0, 1, 0)
+    RemotesTab.Position = UDim2.new(0.33, 0, 0, 0)
+    RemotesTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    RemotesTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    RemotesTab.Text = "Remotes"
+    RemotesTab.BorderSizePixel = 0
+    RemotesTab.Parent = Tabs
     
-    -- Minimieren-Button
-    local minimizeButton = Instance.new("TextButton")
-    minimizeButton.Size = UDim2.new(0, 25, 0, 25)
-    minimizeButton.Position = UDim2.new(1, -30, 0, 2)
-    minimizeButton.BackgroundColor3 = config.ui.theme.background
-    minimizeButton.BackgroundTransparency = 0.5
-    minimizeButton.TextColor3 = config.ui.theme.text
-    minimizeButton.Text = "-"
-    minimizeButton.TextSize = 20
-    minimizeButton.Font = Enum.Font.GothamBold
-    minimizeButton.Parent = titleBar
-    cache.ui.minimizeButton = minimizeButton
+    local SettingsTab = Instance.new("TextButton")
+    SettingsTab.Name = "SettingsTab"
+    SettingsTab.Size = UDim2.new(0.33, 0, 1, 0)
+    SettingsTab.Position = UDim2.new(0.66, 0, 0, 0)
+    SettingsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    SettingsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SettingsTab.Text = "Einstellungen"
+    SettingsTab.BorderSizePixel = 0
+    SettingsTab.Parent = Tabs
     
-    local minimizeCorner = Instance.new("UICorner")
-    minimizeCorner.CornerRadius = UDim.new(0, 4)
-    minimizeCorner.Parent = minimizeButton
+    local Content = Instance.new("Frame")
+    Content.Name = "Content"
+    Content.Size = UDim2.new(1, 0, 0.9, 0)
+    Content.Position = UDim2.new(0, 0, 0.1, 0)
+    Content.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Content.BorderSizePixel = 0
+    Content.Parent = Frame
     
-    -- Toggle-Button
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(0.9, 0, 0, 40)
-    toggleButton.Position = UDim2.new(0.05, 0, 0, 40)
-    toggleButton.BackgroundColor3 = config.ui.theme.accent
-    toggleButton.TextColor3 = config.ui.theme.text
-    toggleButton.Text = "Aktivieren [Z]"
-    toggleButton.TextSize = 16
-    toggleButton.Font = Enum.Font.GothamBold
-    toggleButton.Parent = mainFrame
-    cache.ui.toggleButton = toggleButton
+    local LogsFrame = Instance.new("ScrollingFrame")
+    LogsFrame.Name = "LogsFrame"
+    LogsFrame.Size = UDim2.new(1, 0, 1, 0)
+    LogsFrame.BackgroundTransparency = 1
+    LogsFrame.ScrollBarThickness = 6
+    LogsFrame.Visible = true
+    LogsFrame.Parent = Content
     
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 6)
-    toggleCorner.Parent = toggleButton
+    local UIListLayout = Instance.new("UIListLayout")
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.Parent = LogsFrame
     
-    -- Prioritätsauswahl
-    local priorityLabel = Instance.new("TextLabel")
-    priorityLabel.Size = UDim2.new(0.9, 0, 0, 20)
-    priorityLabel.Position = UDim2.new(0.05, 0, 0, 90)
-    priorityLabel.BackgroundTransparency = 1
-    priorityLabel.TextColor3 = config.ui.theme.subText
-    priorityLabel.Text = "Zielpriorität:"
-    priorityLabel.TextSize = 14
-    priorityLabel.Font = Enum.Font.Gotham
-    priorityLabel.TextXAlignment = Enum.TextXAlignment.Left
-    priorityLabel.Parent = mainFrame
+    local RemotesFrame = Instance.new("ScrollingFrame")
+    RemotesFrame.Name = "RemotesFrame"
+    RemotesFrame.Size = UDim2.new(1, 0, 1, 0)
+    RemotesFrame.BackgroundTransparency = 1
+    RemotesFrame.ScrollBarThickness = 6
+    RemotesFrame.Visible = false
+    RemotesFrame.Parent = Content
     
-    local priorityFrame = Instance.new("Frame")
-    priorityFrame.Size = UDim2.new(0.9, 0, 0, 25)
-    priorityFrame.Position = UDim2.new(0.05, 0, 0, 110)
-    priorityFrame.BackgroundColor3 = config.ui.theme.background
-    priorityFrame.BackgroundTransparency = 0.5
-    priorityFrame.BorderSizePixel = 0
-    priorityFrame.Parent = mainFrame
+    local RemotesUIListLayout = Instance.new("UIListLayout")
+    RemotesUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    RemotesUIListLayout.Parent = RemotesFrame
     
-    local priorityCorner = Instance.new("UICorner")
-    priorityCorner.CornerRadius = UDim.new(0, 4)
-    priorityCorner.Parent = priorityFrame
+    local SettingsFrame = Instance.new("Frame")
+    SettingsFrame.Name = "SettingsFrame"
+    SettingsFrame.Size = UDim2.new(1, 0, 1, 0)
+    SettingsFrame.BackgroundTransparency = 1
+    SettingsFrame.Visible = false
+    SettingsFrame.Parent = Content
     
-    local priorityOptions = {
-        {name = "Entfernung", value = "distance"},
-        {name = "Gesundheit", value = "health"},
-        {name = "Bedrohung", value = "threat"}
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Name = "RSpYToggle"
+    ToggleButton.Size = UDim2.new(0, 100, 0, 30)
+    ToggleButton.Position = UDim2.new(0, 20, 0, 20)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.Text = "RSpY"
+    ToggleButton.BorderSizePixel = 1
+    ToggleButton.BorderColor3 = Color3.fromRGB(100, 100, 100)
+    ToggleButton.Parent = ScreenGui
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        Frame.Visible = not Frame.Visible
+    end)
+    
+    LogsTab.MouseButton1Click:Connect(function()
+        LogsTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        RemotesTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        SettingsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        LogsFrame.Visible = true
+        RemotesFrame.Visible = false
+        SettingsFrame.Visible = false
+    end)
+    
+    RemotesTab.MouseButton1Click:Connect(function()
+        LogsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        RemotesTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        SettingsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        LogsFrame.Visible = false
+        RemotesFrame.Visible = true
+        SettingsFrame.Visible = false
+        RSpY.updateRemotesList()
+    end)
+    
+    SettingsTab.MouseButton1Click:Connect(function()
+        LogsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        RemotesTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        SettingsTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        LogsFrame.Visible = false
+        RemotesFrame.Visible = false
+        SettingsFrame.Visible = true
+    end)
+    
+    ScreenGui.Parent = game:GetService("CoreGui")
+    
+    return {
+        ScreenGui = ScreenGui,
+        Frame = Frame,
+        LogsFrame = LogsFrame,
+        RemotesFrame = RemotesFrame,
+        SettingsFrame = SettingsFrame
     }
+end
+
+-- GUI-Funktionen
+function RSpY.updateGUI()
+    if not RSpY.gui or not RSpY.gui.LogsFrame then return end
     
-    local buttons = {}
-    local buttonWidth = 1 / #priorityOptions
-    
-    for i, option in ipairs(priorityOptions) do
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(buttonWidth, 0, 1, 0)
-        button.Position = UDim2.new(buttonWidth * (i-1), 0, 0, 0)
-        button.BackgroundColor3 = option.value == config.aimbot.targetPriority and config.ui.theme.accent or config.ui.theme.background
-        button.BackgroundTransparency = 0.7
-        button.TextColor3 = config.ui.theme.text
-        button.Text = option.name
-        button.TextSize = 12
-        button.Font = Enum.Font.Gotham
-        button.Parent = priorityFrame
-        buttons[option.value] = button
-        
-        button.MouseButton1Click:Connect(function()
-            config.aimbot.targetPriority = option.value
-            
-            for _, btn in pairs(buttons) do
-                btn.BackgroundColor3 = config.ui.theme.background
-            end
-            
-            button.BackgroundColor3 = config.ui.theme.accent
-            
-            -- Ziele neu sortieren
-            util.findZombies()
-            if #cache.targets > 0 then
-                cache.currentTarget = cache.targets[1]
-                util.updateTargetInfo()
-            end
-        end)
+    -- Logs aktualisieren
+    local logsFrame = RSpY.gui.LogsFrame
+    for _, child in ipairs(logsFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
     end
     
-    -- Optionen
-    local optionsFrame = Instance.new("Frame")
-    optionsFrame.Size = UDim2.new(0.9, 0, 0, 60)
-    optionsFrame.Position = UDim2.new(0.05, 0, 0, 145)
-    optionsFrame.BackgroundColor3 = config.ui.theme.background
-    optionsFrame.BackgroundTransparency = 0.5
-    optionsFrame.BorderSizePixel = 0
-    optionsFrame.Parent = mainFrame
-    
-    local optionsCorner = Instance.new("UICorner")
-    optionsCorner.CornerRadius = UDim.new(0, 4)
-    optionsCorner.Parent = optionsFrame
-    
-    -- Checkbox-Funktion
-    local function createCheckbox(text, position, initialValue, callback)
-        local checkboxFrame = Instance.new("Frame")
-        checkboxFrame.Size = UDim2.new(1, 0, 0, 20)
-        checkboxFrame.Position = position
-        checkboxFrame.BackgroundTransparency = 1
-        checkboxFrame.Parent = optionsFrame
+    for i = #RSpY.logs, 1, -1 do
+        local log = RSpY.logs[i]
         
-        local checkBox = Instance.new("Frame")
-        checkBox.Size = UDim2.new(0, 16, 0, 16)
-        checkBox.Position = UDim2.new(0, 5, 0.5, -8)
-        checkBox.BackgroundColor3 = config.ui.theme.background
-        checkBox.BorderColor3 = config.ui.theme.subText
-        checkBox.BorderSizePixel = 1
-        checkBox.Parent = checkboxFrame
+        local logEntry = Instance.new("Frame")
+        logEntry.Name = "Log_" .. log.id
+        logEntry.Size = UDim2.new(1, 0, 0, 40)
+        logEntry.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        logEntry.BorderSizePixel = 1
+        logEntry.BorderColor3 = Color3.fromRGB(60, 60, 60)
+        logEntry.LayoutOrder = -log.id
         
-        local checkBoxCorner = Instance.new("UICorner")
-        checkBoxCorner.CornerRadius = UDim.new(0, 2)
-        checkBoxCorner.Parent = checkBox
+        local typeColor
+        if log.type == "RemoteEvent" then
+            typeColor = Color3.fromRGB(255, 165, 0) -- Orange für Events
+        else
+            typeColor = Color3.fromRGB(0, 191, 255) -- Blau für Functions
+        end
         
-        local checkMark = Instance.new("Frame")
-        checkMark.Size = UDim2.new(0.7, 0, 0.7, 0)
-        checkMark.Position = UDim2.new(0.15, 0, 0.15, 0)
-        checkMark.BackgroundColor3 = config.ui.theme.accent
-        checkMark.BorderSizePixel = 0
-        checkMark.Visible = initialValue
-        checkMark.Parent = checkBox
+        local typeLabel = Instance.new("TextLabel")
+        typeLabel.Size = UDim2.new(0.15, 0, 1, 0)
+        typeLabel.BackgroundTransparency = 1
+        typeLabel.TextColor3 = typeColor
+        typeLabel.Text = log.type
+        typeLabel.TextSize = 14
+        typeLabel.TextXAlignment = Enum.TextXAlignment.Center
+        typeLabel.Parent = logEntry
         
-        local checkMarkCorner = Instance.new("UICorner")
-        checkMarkCorner.CornerRadius = UDim.new(0, 1)
-        checkMarkCorner.Parent = checkMark
+        local pathLabel = Instance.new("TextLabel")
+        pathLabel.Size = UDim2.new(0.85, 0, 0.5, 0)
+        pathLabel.Position = UDim2.new(0.15, 0, 0, 0)
+        pathLabel.BackgroundTransparency = 1
+        pathLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        pathLabel.Text = log.path
+        pathLabel.TextSize = 14
+        pathLabel.TextXAlignment = Enum.TextXAlignment.Left
+        pathLabel.Parent = logEntry
         
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0.85, 0, 1, 0)
-        label.Position = UDim2.new(0.15, 0, 0, 0)
-        label.BackgroundTransparency = 1
-        label.TextColor3 = config.ui.theme.subText
-        label.Text = text
-        label.TextSize = 12
-        label.Font = Enum.Font.Gotham
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = checkboxFrame
+        local argsLabel = Instance.new("TextLabel")
+        argsLabel.Size = UDim2.new(0.85, 0, 0.5, 0)
+        argsLabel.Position = UDim2.new(0.15, 0, 0.5, 0)
+        argsLabel.BackgroundTransparency = 1
+        argsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
         
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(1, 0, 1, 0)
-        button.BackgroundTransparency = 1
-        button.Text = ""
-        button.Parent = checkboxFrame
+        if log.args and #log.args > 0 then
+            local argsText = "Args: "
+            for i, arg in ipairs(log.args) do
+                if i > 1 then argsText = argsText .. ", " end
+                if type(arg) == "table" then
+                    argsText = argsText .. "{...}"
+                elseif type(arg) == "string" then
+                    if #arg > 20 then
+                        argsText = argsText .. '"' .. string.sub(arg, 1, 20) .. '..."'
+                    else
+                        argsText = argsText .. '"' .. arg .. '"'
+                    end
+                else
+                    argsText = argsText .. tostring(arg)
+                end
+                
+                if i >= 3 and #log.args > 3 then
+                    argsText = argsText .. ", ... [" .. (#log.args - 3) .. " more]"
+                    break
+                end
+            end
+            argsLabel.Text = argsText
+        else
+            argsLabel.Text = "Keine Argumente"
+        end
         
-        local checked = initialValue
-        button.MouseButton1Click:Connect(function()
-            checked = not checked
-            checkMark.Visible = checked
-            callback(checked)
+        argsLabel.TextSize = 12
+        argsLabel.TextXAlignment = Enum.TextXAlignment.Left
+        argsLabel.Parent = logEntry
+        
+        local copyButton = Instance.new("TextButton")
+        copyButton.Size = UDim2.new(0, 20, 0, 20)
+        copyButton.Position = UDim2.new(1, -25, 0, 10)
+        copyButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        copyButton.Text = "C"
+        copyButton.BorderSizePixel = 1
+        copyButton.BorderColor3 = Color3.fromRGB(100, 100, 100)
+        copyButton.Parent = logEntry
+        
+        copyButton.MouseButton1Click:Connect(function()
+            local code = ""
+            if log.type == "RemoteEvent" then
+                code = string.format('game:GetService("ReplicatedStorage"):WaitForChild("%s"):FireServer(%s)', log.path, getArgsString(log.args))
+            else
+                code = string.format('game:GetService("ReplicatedStorage"):WaitForChild("%s"):InvokeServer(%s)', log.path, getArgsString(log.args))
+            end
+            setclipboard(code)
         end)
         
-        return {
-            frame = checkboxFrame,
-            update = function(value)
-                checked = value
-                checkMark.Visible = checked
-            end
-        }
+        logEntry.Parent = logsFrame
+    end
+end
+
+function RSpY.updateRemotesList()
+    if not RSpY.gui or not RSpY.gui.RemotesFrame then return end
+    
+    -- Remotes-Liste aktualisieren
+    local remotesFrame = RSpY.gui.RemotesFrame
+    for _, child in ipairs(remotesFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
     end
     
-    -- Optionen erstellen
-    local headShotCheckbox = createCheckbox("Kopfschuss Focus", UDim2.new(0, 0, 0, 0), config.aimbot.headShotOnly, function(value)
-        config.aimbot.headShotOnly = value
+    local sortedRemotes = {}
+    for remote, remoteType in pairs(RSpY.remotes) do
+        table.insert(sortedRemotes, {
+            remote = remote,
+            type = remoteType,
+            path = getRemotePath(remote)
+        })
+    end
+    
+    table.sort(sortedRemotes, function(a, b)
+        return a.path < b.path
     end)
     
-    local predictiveCheckbox = createCheckbox("Prädiktives Zielen", UDim2.new(0, 0, 0, 20), config.aimbot.predictiveAiming, function(value)
-        config.aimbot.predictiveAiming = value
+    for i, remoteInfo in ipairs(sortedRemotes) do
+        local remoteEntry = Instance.new("Frame")
+        remoteEntry.Name = "Remote_" .. i
+        remoteEntry.Size = UDim2.new(1, 0, 0, 30)
+        remoteEntry.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        remoteEntry.BorderSizePixel = 1
+        remoteEntry.BorderColor3 = Color3.fromRGB(60, 60, 60)
+        
+        local typeColor
+        if remoteInfo.type == "RemoteEvent" then
+            typeColor = Color3.fromRGB(255, 165, 0) -- Orange für Events
+        else
+            typeColor = Color3.fromRGB(0, 191, 255) -- Blau für Functions
+        end
+        
+        local typeLabel = Instance.new("TextLabel")
+        typeLabel.Size = UDim2.new(0.15, 0, 1, 0)
+        typeLabel.BackgroundTransparency = 1
+        typeLabel.TextColor3 = typeColor
+        typeLabel.Text = remoteInfo.type
+        typeLabel.TextSize = 14
+        typeLabel.TextXAlignment = Enum.TextXAlignment.Center
+        typeLabel.Parent = remoteEntry
+        
+        local pathLabel = Instance.new("TextLabel")
+        pathLabel.Size = UDim2.new(0.85, 0, 1, 0)
+        pathLabel.Position = UDim2.new(0.15, 0, 0, 0)
+        pathLabel.BackgroundTransparency = 1
+        pathLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        pathLabel.Text = remoteInfo.path
+        pathLabel.TextSize = 14
+        pathLabel.TextXAlignment = Enum.TextXAlignment.Left
+        pathLabel.Parent = remoteEntry
+        
+        remoteEntry.Parent = remotesFrame
+    end
+end
+
+-- Initialisierung
+function RSpY.init()
+    print("Remote Spy (RSpY) wird gestartet...")
+    
+    -- GUI erstellen, wenn aktiviert
+    if settings.guiEnabled then
+        RSpY.gui = createGUI()
+    end
+    
+    -- Vorhandene Remotes finden und hooking
+    local function scanInstance(instance)
+        for _, child in ipairs(instance:GetChildren()) do
+            if child:IsA("RemoteEvent") then
+                hookRemoteEvent(child)
+            elseif child:IsA("RemoteFunction") then
+                hookRemoteFunction(child)
+            end
+            
+            scanInstance(child)
+        end
+    end
+    
+    scanInstance(game:GetService("ReplicatedStorage"))
+    
+    -- Auf neue Remotes überwachen
+    game.DescendantAdded:Connect(function(instance)
+        if instance:IsA("RemoteEvent") or instance:IsA("RemoteFunction") then
+            hookNewRemote(instance)
+        end
     end)
     
-    local visualFeedbackCheckbox = createCheckbox("Visuelles Feedback", UDim2.new(0, 0, 0, 40), config.aimbot.visualFeedback, function(value)
-        config.aimbot.visualFeedback = value
-    end)
-    
-    -- Zielinformationen
-    local targetInfoFrame = Instance.new("Frame")
-    targetInfoFrame.Size = UDim2.new(0.9, 0, 0, 40)
-    targetInfoFrame.Position = UDim2.new(0.05, 0, 1, -45)
-    targetInfoFrame.BackgroundColor3 = config.ui.theme.background
-    targetInfoFrame.BackgroundTransparency = 0.5
-    targetInfoFrame.BorderSizePixel = 0
-    targetInfoFrame.Parent = mainFrame
-    cache.ui.targetInfoFrame = targetInfoFrame
-    
-    local targetInfoCorner = Instance.new("UICorner")
-    targetInfoCorner.CornerRadius = UDim.new(0, 4)
-    targetInfoCorner.Parent = targetInfoFrame
-    
-    local targetLabel = Instance.new("TextLabel")
-    targetLabel.Size = UDim2.new(1, 0, 0, 20)
-    targetLabel.Position = UDim2.new(0, 5, 0, 0)
-    targetLabel.BackgroundTransparency = 1
-    targetLabel.TextColor3 = config.ui.theme.subText
-    targetLabel.Text = "Aktuelles Ziel: Keins"
-    targetLabel.TextSize = 12
-    targetLabel.Font = Enum.Font.Gotham
-    targetLabel.TextXAlignment = Enum.TextXAlignment.Left
-    targetLabel.Parent = targetInfoFrame
-    cache.ui.targetLabel = targetLabel
-    
-    local distanceLabel = Instance.new("TextLabel")
-    distanceLabel.Size = UDim2.new(0.5, 0, 0, 20)
-    distanceLabel.Position = UDim2.new(0, 5, 0, 20)
-    distanceLabel.BackgroundTransparency = 1
-    distanceLabel.TextColor3 = config.ui.theme.subText
-    distanceLabel.Text = "Entfernung: -"
-    distanceLabel.TextSize = 12
-    distanceLabel.Font = Enum.Font.Gotham
-    distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
-    distanceLabel.Parent = targetInfoFrame
-    cache.ui.distanceLabel = distanceLabel
-    
-    local healthLabel = Instance.new("TextLabel")
-    healthLabel.Size = UDim2.new(0.5, 0, 0, 20)
-    healthLabel.Position = UDim2.new(0.5, 0, 0, 20)
-    healthLabel.BackgroundTransparency = 1
-    healthLabel.TextColor3 = config.ui.theme.subText
-    healthLabel.Text = "Gesundheit: -"
-    healthLabel.TextSize = 12
-    healthLabel.Font = Enum.Font.Gotham
-    healthLabel.TextXAlignment = Enum.TextXAlignment.Left
-    healthLabel.Parent = targetInfoFrame
-    cache.ui.healthLabel = healthLabel
+    print("Remote Spy (RSpY) wurde gestartet! " .. tostring(table.getn(RSpY.remotes)) .. " Remotes wurden gefunden.")
+end
+
+-- Starte Remote Spy
+RSpY.init()
+
+return RSpY
