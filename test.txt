@@ -218,10 +218,10 @@ local function ToggleAutoFarm()
     end
 end
 
--- Ereignisbehandlung für Benutzereingaben (STRG+F zum Umschalten)
+-- Ereignisbehandlung für Benutzereingaben (E zum Umschalten)
 local UserInputService = game:GetService("UserInputService")
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.F and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
         ToggleAutoFarm()
     end
 end)
