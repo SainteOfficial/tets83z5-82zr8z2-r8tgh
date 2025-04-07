@@ -1,609 +1,247 @@
---[[
-    Improved Remote Spy (RSpY) für Roblox
-    Überprüft alle 0.03 Sekunden auf neue RemoteEvents und RemoteFunctions
-    Zeigt detaillierte Informationen mit Zeitstempeln an
-    Verbessertes Design und Fehlerbehandlung
-]]
+-- Auto-Farm Bot für Roblox
+-- Dieses Script automatisiert das Farmen von Mobs
 
--- Einstellungen
-local settings = {
-    ignoreList = {
-        ["ReplicatedStorage.Events.HiNoob"] = true,
-        ["ReplicatedStorage.Events.Combat"] = true
-    },
-    saveRemoteCalls = true,       -- Speichert alle Remote-Aufrufe
-    maxSavedCalls = 100,          -- Maximale Anzahl gespeicherter Aufrufe
-    refreshRate = 0.03,           -- Überprüft alle 0.03 Sekunden auf neue Remotes
-    includeArguments = true       -- Argumente der Remote-Aufrufe anzeigen
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+-- Variablen
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Camera = workspace.CurrentCamera
+
+-- Konfiguration
+local CONFIG = {
+    HOVER_HEIGHT = 15, -- Höhe über dem Mob
+    AUTO_ATTACK = true, -- Automatisch angreifen aktivieren
+    CLICK_INTERVAL = {0.05, 0.15}, -- Zufälliges Intervall für menschlicheres Timing
+    TARGET_MOB_TYPE = "Golem", -- Typ des Ziels (z.B. "Golem")
+    HITBOX_SIZE = Vector3.new(10, 10, 10), -- Größe der erweiterten Hitbox
+    DEBUG_MODE = true -- Debug-Modus aktivieren/deaktivieren
 }
 
--- Hauptklasse für Remote Spy
-local RSpY = {}
-RSpY.remotes = {}
-RSpY.logs = {}
-RSpY.gui = nil
-RSpY.logCount = 0
-RSpY.remoteCount = 0
+-- Variablen für Script-Zustand
+local CurrentTarget = nil
+local IsAttacking = false
+local FlyEnabled = false
+local HitboxExpander = nil
 
--- Hilfsfunktionen
-local function getRemotePath(remote)
-    if not remote or not remote.Parent then return "Ungültiger Remote" end
+-- Debug-Funktion
+local function Debug(message)
+    if CONFIG.DEBUG_MODE then
+        print("[Auto-Farm] " .. message)
+    end
+end
+
+-- Finde den nächsten Mob
+local function FindNearestMob()
+    local nearestMob = nil
+    local shortestDistance = math.huge
     
-    local path = remote.Name
-    local parent = remote.Parent
-    
-    while parent and parent ~= game do
-        path = parent.Name .. "." .. path
-        parent = parent.Parent
+    -- Überprüfe, ob der Mobs-Ordner existiert
+    if not workspace:FindFirstChild("Mobs") then
+        Debug("Keine Mobs gefunden!")
+        return nil
     end
     
-    return path
-end
-
-local function isRemoteIgnored(remote)
-    local path = getRemotePath(remote)
-    return settings.ignoreList[path] ~= nil
-end
-
-local function getFormattedTime()
-    local date = os.date("*t")
-    return string.format("%02d:%02d:%02d.%03d", date.hour, date.min, date.sec, tick() % 1 * 1000)
-end
-
-local function getTableString(tbl, depth)
-    depth = depth or 0
-    
-    if depth > 3 then
-        return "{...}" -- Begrenze die Tiefe
-    end
-    
-    local result = "{"
-    local indent = string.rep("    ", depth + 1)
-    local closeIndent = string.rep("    ", depth)
-    local isFirst = true
-    
-    for k, v in pairs(tbl) do
-        if not isFirst then
-            result = result .. ","
+    -- Durchsuche alle Mobs
+    for _, mob in pairs(workspace.Mobs:GetChildren()) do
+        -- Prüfe, ob es sich um den gesuchten Mobtyp handelt
+        if mob.Name:find(CONFIG.TARGET_MOB_TYPE) then
+            -- Prüfe, ob der Mob einen HumanoidRootPart hat
+            local mobHRP = mob:FindFirstChild("HumanoidRootPart")
+            local mobHumanoid = mob:FindFirstChild("Humanoid")
+            
+            if mobHRP and mobHumanoid and mobHumanoid.Health > 0 then
+                local distance = (HumanoidRootPart.Position - mobHRP.Position).Magnitude
+                
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestMob = mob
+                end
+            end
         end
-        
-        result = result .. "\n" .. indent
-        
-        -- Schlüssel darstellen
-        if type(k) == "string" then
-            result = result .. '["' .. k .. '"] = '
-        else
-            result = result .. "[" .. tostring(k) .. "] = "
-        end
-        
-        -- Wert darstellen
-        if type(v) == "table" then
-            result = result .. getTableString(v, depth + 1)
-        elseif type(v) == "string" then
-            result = result .. '"' .. v .. '"'
-        elseif type(v) == "function" then
-            result = result .. "function(...)"
-        elseif type(v) == "userdata" then
-            result = result .. tostring(v)
-        else
-            result = result .. tostring(v)
-        end
-        
-        isFirst = false
     end
     
-    if not isFirst then
-        result = result .. "\n" .. closeIndent
-    end
-    
-    return result .. "}"
+    return nearestMob
 end
 
-local function formatValue(value)
-    if type(value) == "table" then
-        return getTableString(value)
-    elseif type(value) == "string" then
-        return '"' .. value .. '"'
-    elseif type(value) == "function" then
-        return "function(...)"
-    elseif type(value) == "userdata" then
-        return tostring(value)
+-- Aktiviere/Deaktiviere Fliegen
+local function ToggleFly(enable)
+    if FlyEnabled == enable then return end
+    
+    FlyEnabled = enable
+    
+    if enable then
+        Debug("Flugmodus aktiviert")
+        -- Implementiere hier deinen Flugmechanismus
+        -- Dies ist ein Beispiel und muss möglicherweise an das spezifische Spiel angepasst werden
+        local Humanoid = Character:FindFirstChild("Humanoid")
+        if Humanoid then
+            Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+            workspace.Gravity = 0
+        end
     else
-        return tostring(value)
+        Debug("Flugmodus deaktiviert")
+        workspace.Gravity = 196.2 -- Standard-Gravitationswert
+        local Humanoid = Character:FindFirstChild("Humanoid")
+        if Humanoid then
+            Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
     end
 end
 
--- Hilfsfunktion für das Kopieren der Argumente
-local function getArgsString(args)
-    if not args or #args == 0 then
-        return ""
+-- Erstelle oder aktualisiere die erweiterte Hitbox für das Ziel
+local function UpdateHitbox(target)
+    if not target then
+        if HitboxExpander then
+            HitboxExpander:Destroy()
+            HitboxExpander = nil
+        end
+        return
     end
     
-    local result = ""
-    for i, arg in ipairs(args) do
-        if i > 1 then
-            result = result .. ", "
-        end
+    local targetHRP = target:FindFirstChild("HumanoidRootPart")
+    if not targetHRP then return end
+    
+    if not HitboxExpander then
+        HitboxExpander = Instance.new("Part")
+        HitboxExpander.Name = "HitboxExpander"
+        HitboxExpander.Anchored = false
+        HitboxExpander.CanCollide = false
+        HitboxExpander.Transparency = 0.8 -- Leicht sichtbar für Debugging
+        HitboxExpander.Material = Enum.Material.SmoothPlastic
+        HitboxExpander.Color = Color3.fromRGB(255, 0, 0)
         
-        if type(arg) == "string" then
-            result = result .. '"' .. arg .. '"'
-        elseif type(arg) == "table" then
-            result = result .. getTableString(arg)
+        -- Weld zum Ziel
+        local Weld = Instance.new("Weld")
+        Weld.Part0 = targetHRP
+        Weld.Part1 = HitboxExpander
+        Weld.C0 = CFrame.new(0, 0, 0)
+        Weld.Parent = HitboxExpander
+        
+        HitboxExpander.Parent = workspace
+    end
+    
+    -- Aktualisiere die Größe und Position
+    HitboxExpander.Size = CONFIG.HITBOX_SIZE
+    HitboxExpander.CFrame = targetHRP.CFrame
+end
+
+-- Positioniere den Spieler über dem Ziel
+local function PositionOverTarget(target)
+    if not target then return end
+    
+    local targetHRP = target:FindFirstChild("HumanoidRootPart")
+    if not targetHRP then return end
+    
+    -- Berechne die Position über dem Ziel
+    local targetPosition = targetHRP.Position + Vector3.new(0, CONFIG.HOVER_HEIGHT, 0)
+    
+    -- Positioniere den Spieler
+    HumanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(90), 0, 0) -- 90 Grad nach unten schauen
+    
+    -- Kamera ausrichten
+    Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetHRP.Position)
+end
+
+-- Simuliere einen Mausklick
+local function SimulateClick()
+    -- Koordinaten des Bildschirmmittelpunkts
+    local screenSize = Camera.ViewportSize
+    local centerX = screenSize.X / 2
+    local centerY = screenSize.Y / 2
+    
+    -- Sende Mausereignis (linke Maustaste drücken und loslassen)
+    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1) -- Drücken
+    task.wait(0.05) -- Kurze Verzögerung
+    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1) -- Loslassen
+    
+    -- Füge eine zufällige Verzögerung hinzu
+    task.wait(math.random(CONFIG.CLICK_INTERVAL[1] * 100, CONFIG.CLICK_INTERVAL[2] * 100) / 100)
+end
+
+-- Hauptschleife für den Auto-Farm
+local function StartAutoFarm()
+    if IsAttacking then return end
+    IsAttacking = true
+    Debug("Auto-Farm gestartet")
+    
+    -- Hauptschleife
+    while IsAttacking do
+        -- Finde das nächste Ziel
+        CurrentTarget = FindNearestMob()
+        
+        if CurrentTarget then
+            Debug("Ziel gefunden: " .. CurrentTarget.Name)
+            
+            -- Aktiviere Fliegen
+            ToggleFly(true)
+            
+            -- Erstelle erweiterte Hitbox
+            UpdateHitbox(CurrentTarget)
+            
+            -- Positioniere über dem Ziel
+            PositionOverTarget(CurrentTarget)
+            
+            -- Wenn Auto-Attack aktiviert ist, führe einen Angriff aus
+            if CONFIG.AUTO_ATTACK then
+                SimulateClick()
+            end
         else
-            result = result .. tostring(arg)
+            Debug("Kein Ziel gefunden, suche weiter...")
+            -- Optionales Verhalten, wenn kein Ziel gefunden wird
+            task.wait(1)
         end
-    end
-    
-    return result
-end
-
--- Logs formatieren und hinzufügen
-local function addToLogs(remoteType, remote, args, returnValue)
-    if not settings.saveRemoteCalls then return end
-    
-    RSpY.logCount = RSpY.logCount + 1
-    
-    local log = {
-        id = RSpY.logCount,
-        timestamp = getFormattedTime(),
-        type = remoteType,
-        path = getRemotePath(remote),
-        remote = remote,
-        args = settings.includeArguments and args or nil
-    }
-    
-    if returnValue ~= nil then
-        log.returnValue = returnValue
-    end
-    
-    -- Begrenze die Anzahl der Logs
-    while #RSpY.logs >= settings.maxSavedCalls do
-        table.remove(RSpY.logs, 1)
-    end
-    
-    table.insert(RSpY.logs, log)
-    
-    -- Log in der Konsole anzeigen
-    local argsStr = ""
-    if settings.includeArguments and args then
-        for i, arg in ipairs(args) do
-            if i > 1 then argsStr = argsStr .. ", " end
-            
-            if type(arg) == "table" then
-                argsStr = argsStr .. "{...}"
-            elseif type(arg) == "string" then
-                if #arg > 20 then
-                    argsStr = argsStr .. '"' .. string.sub(arg, 1, 20) .. '..."'
-                else
-                    argsStr = argsStr .. '"' .. arg .. '"'
-                end
-            else
-                argsStr = argsStr .. tostring(arg)
-            end
-            
-            if i >= 3 and #args > 3 then
-                argsStr = argsStr .. ", ... [" .. (#args - 3) .. " mehr]"
-                break
-            end
-        end
-    end
-    
-    print(string.format("[RSpY %s] %s: %s(%s)", log.timestamp, remoteType, log.path, argsStr))
-    
-    -- GUI aktualisieren
-    updateGUI()
-end
-
--- Remote-Aufzeichnung
-local function recordRemote(remote, remoteType)
-    if not remote or isRemoteIgnored(remote) then return end
-    
-    if not RSpY.remotes[remote] then
-        RSpY.remotes[remote] = remoteType
-        RSpY.remoteCount = RSpY.remoteCount + 1
-    end
-end
-
--- GUI erstellen
-local function createGUI()
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "ImprovedRSpYGUI"
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.DisplayOrder = 999
-    
-    local MainFrame = Instance.new("Frame")
-    MainFrame.Name = "MainFrame"
-    MainFrame.Size = UDim2.new(0.6, 0, 0.7, 0)
-    MainFrame.Position = UDim2.new(0.2, 0, 0.15, 0)
-    MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
-    MainFrame.BorderSizePixel = 0
-    MainFrame.Visible = false
-    MainFrame.Parent = ScreenGui
-    
-    -- Füge einen abgerundeten Rahmen hinzu
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 8)
-    UICorner.Parent = MainFrame
-    
-    -- Schatten-Effekt
-    local UIShadow = Instance.new("ImageLabel")
-    UIShadow.Name = "Shadow"
-    UIShadow.Size = UDim2.new(1, 20, 1, 20)
-    UIShadow.Position = UDim2.new(0, -10, 0, -10)
-    UIShadow.BackgroundTransparency = 1
-    UIShadow.Image = "rbxassetid://5554236805"
-    UIShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    UIShadow.ScaleType = Enum.ScaleType.Slice
-    UIShadow.SliceCenter = Rect.new(23, 23, 277, 277)
-    UIShadow.ImageTransparency = 0.4
-    UIShadow.ZIndex = -1
-    UIShadow.Parent = MainFrame
-    
-    -- Überschrift
-    local Title = Instance.new("TextLabel")
-    Title.Name = "Title"
-    Title.Size = UDim2.new(1, 0, 0.06, 0)
-    Title.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    Title.TextColor3 = Color3.fromRGB(240, 240, 240)
-    Title.TextSize = 18
-    Title.Font = Enum.Font.SourceSansBold
-    Title.Text = "Improved Remote Spy"
-    Title.BorderSizePixel = 0
-    Title.Parent = MainFrame
-    
-    local TitleCorner = Instance.new("UICorner")
-    TitleCorner.CornerRadius = UDim.new(0, 8)
-    TitleCorner.Parent = Title
-    
-    -- Schließen-Button
-    local Close = Instance.new("TextButton")
-    Close.Name = "Close"
-    Close.Size = UDim2.new(0.05, 0, 0.8, 0)
-    Close.Position = UDim2.new(0.94, 0, 0.1, 0)
-    Close.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-    Close.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Close.Text = "X"
-    Close.Font = Enum.Font.SourceSansBold
-    Close.TextSize = 16
-    Close.BorderSizePixel = 0
-    Close.Parent = Title
-    
-    local CloseCorner = Instance.new("UICorner")
-    CloseCorner.CornerRadius = UDim.new(0, 4)
-    CloseCorner.Parent = Close
-    
-    -- Log-Container
-    local LogContainer = Instance.new("ScrollingFrame")
-    LogContainer.Name = "LogContainer"
-    LogContainer.Size = UDim2.new(1, -20, 0.94, -20)
-    LogContainer.Position = UDim2.new(0, 10, 0.06, 10)
-    LogContainer.BackgroundTransparency = 1
-    LogContainer.ScrollBarThickness = 6
-    LogContainer.ScrollingDirection = Enum.ScrollingDirection.Y
-    LogContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    LogContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
-    LogContainer.Parent = MainFrame
-    
-    local UIListLayout = Instance.new("UIListLayout")
-    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    UIListLayout.Padding = UDim.new(0, 5)
-    UIListLayout.Parent = LogContainer
-    
-    -- Toggle-Button
-    local ToggleButton = Instance.new("TextButton")
-    ToggleButton.Name = "RSpYToggle"
-    ToggleButton.Size = UDim2.new(0, 100, 0, 36)
-    ToggleButton.Position = UDim2.new(0, 20, 0, 20)
-    ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-    ToggleButton.TextColor3 = Color3.fromRGB(240, 240, 240)
-    ToggleButton.Text = "RSpY"
-    ToggleButton.Font = Enum.Font.SourceSansBold
-    ToggleButton.TextSize = 16
-    ToggleButton.BorderSizePixel = 0
-    ToggleButton.ZIndex = 10
-    ToggleButton.Parent = ScreenGui
-    
-    local ToggleButtonCorner = Instance.new("UICorner")
-    ToggleButtonCorner.CornerRadius = UDim.new(0, 6)
-    ToggleButtonCorner.Parent = ToggleButton
-    
-    -- Zähler-Label
-    local CounterLabel = Instance.new("TextLabel")
-    CounterLabel.Name = "Counter"
-    CounterLabel.Size = UDim2.new(0, 30, 0, 30)
-    CounterLabel.Position = UDim2.new(1, -15, 0, 3)
-    CounterLabel.BackgroundColor3 = Color3.fromRGB(60, 120, 190)
-    CounterLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    CounterLabel.Text = "0"
-    CounterLabel.Font = Enum.Font.SourceSansBold
-    CounterLabel.TextSize = 14
-    CounterLabel.BorderSizePixel = 0
-    CounterLabel.ZIndex = 11
-    CounterLabel.Parent = ToggleButton
-    
-    local CounterCorner = Instance.new("UICorner")
-    CounterCorner.CornerRadius = UDim.new(1, 0) -- Kreis
-    CounterCorner.Parent = CounterLabel
-    
-    -- Event-Handler
-    Close.MouseButton1Click:Connect(function()
-        MainFrame.Visible = false
-    end)
-    
-    ToggleButton.MouseButton1Click:Connect(function()
-        MainFrame.Visible = not MainFrame.Visible
-    end)
-    
-    -- Speichere Referenzen für später
-    local guiRefs = {
-        ScreenGui = ScreenGui,
-        MainFrame = MainFrame,
-        LogContainer = LogContainer,
-        CounterLabel = CounterLabel
-    }
-    
-    -- Füge GUI zum CoreGui hinzu
-    ScreenGui.Parent = game:GetService("CoreGui")
-    
-    return guiRefs
-end
-
--- GUI aktualisieren
-function updateGUI()
-    if not RSpY.gui or not RSpY.gui.LogContainer then return end
-    
-    -- Counter aktualisieren
-    RSpY.gui.CounterLabel.Text = tostring(RSpY.logCount)
-    
-    -- Überprüfe, ob es neue Logs gibt, die angezeigt werden müssen
-    local logContainer = RSpY.gui.LogContainer
-    local existingEntries = {}
-    
-    -- Bestehende Log-Einträge identifizieren
-    for _, child in ipairs(logContainer:GetChildren()) do
-        if child:IsA("Frame") and child.Name:match("^Log_") then
-            local logId = tonumber(child.Name:match("^Log_(%d+)"))
-            if logId then
-                existingEntries[logId] = child
-            end
-        end
-    end
-    
-    -- Neue Logs hinzufügen
-    for i = #RSpY.logs, 1, -1 do
-        local log = RSpY.logs[i]
         
-        if not existingEntries[log.id] then
-            -- Neuer Log-Eintrag
-            local logEntry = Instance.new("Frame")
-            logEntry.Name = "Log_" .. log.id
-            logEntry.Size = UDim2.new(1, -10, 0, 60)
-            logEntry.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-            logEntry.BorderSizePixel = 0
-            logEntry.LayoutOrder = -log.id
-            
-            local EntryCorner = Instance.new("UICorner")
-            EntryCorner.CornerRadius = UDim.new(0, 6)
-            EntryCorner.Parent = logEntry
-            
-            -- Farbkodierung für Event/Function
-            local indicatorColor
-            if log.type == "RemoteEvent" then
-                indicatorColor = Color3.fromRGB(255, 140, 50) -- Orange für Events
-            else
-                indicatorColor = Color3.fromRGB(50, 180, 255) -- Blau für Functions
-            end
-            
-            local typeIndicator = Instance.new("Frame")
-            typeIndicator.Name = "TypeIndicator"
-            typeIndicator.Size = UDim2.new(0, 4, 1, 0)
-            typeIndicator.BackgroundColor3 = indicatorColor
-            typeIndicator.BorderSizePixel = 0
-            typeIndicator.Parent = logEntry
-            
-            local IndicatorCorner = Instance.new("UICorner")
-            IndicatorCorner.CornerRadius = UDim.new(0, 6)
-            IndicatorCorner.Parent = typeIndicator
-            
-            -- Zeitstempel
-            local timeLabel = Instance.new("TextLabel")
-            timeLabel.Name = "TimeLabel"
-            timeLabel.Size = UDim2.new(0.2, 0, 0, 20)
-            timeLabel.Position = UDim2.new(0.02, 0, 0, 5)
-            timeLabel.BackgroundTransparency = 1
-            timeLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-            timeLabel.Text = log.timestamp
-            timeLabel.TextSize = 12
-            timeLabel.Font = Enum.Font.SourceSans
-            timeLabel.TextXAlignment = Enum.TextXAlignment.Left
-            timeLabel.Parent = logEntry
-            
-            -- Typ
-            local typeLabel = Instance.new("TextLabel")
-            typeLabel.Name = "TypeLabel"
-            typeLabel.Size = UDim2.new(0.15, 0, 0, 20)
-            typeLabel.Position = UDim2.new(0.23, 0, 0, 5)
-            typeLabel.BackgroundTransparency = 1
-            typeLabel.TextColor3 = indicatorColor
-            typeLabel.Text = log.type:gsub("Remote", "")
-            typeLabel.TextSize = 14
-            typeLabel.Font = Enum.Font.SourceSansBold
-            typeLabel.TextXAlignment = Enum.TextXAlignment.Left
-            typeLabel.Parent = logEntry
-            
-            -- Pfad
-            local pathLabel = Instance.new("TextLabel")
-            pathLabel.Name = "PathLabel"
-            pathLabel.Size = UDim2.new(0.6, 0, 0, 20)
-            pathLabel.Position = UDim2.new(0.38, 0, 0, 5)
-            pathLabel.BackgroundTransparency = 1
-            pathLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
-            pathLabel.Text = log.path
-            pathLabel.TextSize = 14
-            pathLabel.Font = Enum.Font.SourceSans
-            pathLabel.TextXAlignment = Enum.TextXAlignment.Left
-            pathLabel.TextTruncate = Enum.TextTruncate.AtEnd
-            pathLabel.Parent = logEntry
-            
-            -- Argumente
-            local argsLabel = Instance.new("TextLabel")
-            argsLabel.Name = "ArgsLabel"
-            argsLabel.Size = UDim2.new(0.98, 0, 0, 20)
-            argsLabel.Position = UDim2.new(0.02, 0, 0, 30)
-            argsLabel.BackgroundTransparency = 1
-            argsLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-            argsLabel.TextSize = 12
-            argsLabel.Font = Enum.Font.SourceSans
-            argsLabel.TextXAlignment = Enum.TextXAlignment.Left
-            argsLabel.TextTruncate = Enum.TextTruncate.AtEnd
-            argsLabel.Parent = logEntry
-            
-            if log.args and #log.args > 0 then
-                local argsText = "Args: "
-                for i, arg in ipairs(log.args) do
-                    if i > 1 then argsText = argsText .. ", " end
-                    if type(arg) == "table" then
-                        argsText = argsText .. "{...}"
-                    elseif type(arg) == "string" then
-                        if #arg > 20 then
-                            argsText = argsText .. '"' .. string.sub(arg, 1, 20) .. '..."'
-                        else
-                            argsText = argsText .. '"' .. arg .. '"'
-                        end
-                    else
-                        argsText = argsText .. tostring(arg)
-                    end
-                    
-                    if i >= 3 and #log.args > 3 then
-                        argsText = argsText .. ", ... [" .. (#log.args - 3) .. " more]"
-                        break
-                    end
-                end
-                argsLabel.Text = argsText
-            else
-                argsLabel.Text = "Keine Argumente"
-            end
-            
-            -- Kopier-Button
-            local copyButton = Instance.new("TextButton")
-            copyButton.Name = "CopyButton"
-            copyButton.Size = UDim2.new(0, 24, 0, 24)
-            copyButton.Position = UDim2.new(1, -30, 0, 18)
-            copyButton.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-            copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-            copyButton.Text = "📋"
-            copyButton.Font = Enum.Font.SourceSansBold
-            copyButton.TextSize = 14
-            copyButton.BorderSizePixel = 0
-            copyButton.Parent = logEntry
-            
-            local CopyCorner = Instance.new("UICorner")
-            CopyCorner.CornerRadius = UDim.new(0, 4)
-            CopyCorner.Parent = copyButton
-            
-            copyButton.MouseButton1Click:Connect(function()
-                local code = ""
-                if log.type == "RemoteEvent" then
-                    code = string.format('game:GetService("ReplicatedStorage"):WaitForChild("%s"):FireServer(%s)', log.path, getArgsString(log.args))
-                else
-                    code = string.format('game:GetService("ReplicatedStorage"):WaitForChild("%s"):InvokeServer(%s)', log.path, getArgsString(log.args))
-                end
-                setclipboard(code)
-            end)
-            
-            logEntry.Parent = logContainer
-        end
-    end
-    
-    -- Maximale Anzahl von Log-Einträgen begrenzen
-    local entries = {}
-    for _, child in ipairs(logContainer:GetChildren()) do
-        if child:IsA("Frame") and child.Name:match("^Log_") then
-            table.insert(entries, child)
-        end
-    end
-    
-    table.sort(entries, function(a, b)
-        local idA = tonumber(a.Name:match("^Log_(%d+)"))
-        local idB = tonumber(b.Name:match("^Log_(%d+)"))
-        return idA > idB
-    end)
-    
-    for i = settings.maxSavedCalls + 1, #entries do
-        if entries[i] then
-            entries[i]:Destroy()
-        end
+        -- Pause, um die Hauptschleife nicht zu überlasten
+        task.wait(0.1)
     end
 end
 
--- Namecall-Methode für das Abfangen von Remote-Ereignissen
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    
-    if (method == "FireServer" or method == "fireServer") and self:IsA("RemoteEvent") then
-        recordRemote(self, "RemoteEvent")
-        if not isRemoteIgnored(self) then
-            addToLogs("RemoteEvent", self, args)
-        end
-    elseif (method == "InvokeServer" or method == "invokeServer") and self:IsA("RemoteFunction") then
-        recordRemote(self, "RemoteFunction")
-        if not isRemoteIgnored(self) then
-            local returnValue = {oldNamecall(self, ...)}
-            addToLogs("RemoteFunction", self, args, returnValue)
-            return unpack(returnValue)
-        end
+-- Stoppe den Auto-Farm
+local function StopAutoFarm()
+    IsAttacking = false
+    ToggleFly(false)
+    UpdateHitbox(nil) -- Entferne Hitbox
+    Debug("Auto-Farm gestoppt")
+end
+
+-- Toggle-Funktion für die Aktivierung/Deaktivierung des Bots
+local function ToggleAutoFarm()
+    if IsAttacking then
+        StopAutoFarm()
+    else
+        StartAutoFarm()
     end
-    
-    return oldNamecall(self, ...)
+end
+
+-- Ereignisbehandlung für Benutzereingaben (STRG+F zum Umschalten)
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.F and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        ToggleAutoFarm()
+    end
 end)
 
--- Initialisierung
-function RSpY.init()
-    print("Improved Remote Spy wird gestartet...")
+-- Event-Handler für Character-Respawn
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Character = newCharacter
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+    Debug("Charakter respawned, aktualisiere Referenzen")
     
-    -- GUI erstellen
-    RSpY.gui = createGUI()
-    
-    -- Vorhandene Remotes scannen
-    local function scanInstance(instance)
-        for _, child in ipairs(instance:GetChildren()) do
-            if child:IsA("RemoteEvent") then
-                recordRemote(child, "RemoteEvent")
-            elseif child:IsA("RemoteFunction") then
-                recordRemote(child, "RemoteFunction")
-            end
-            
-            scanInstance(child)
-        end
+    -- Wenn der Bot aktiv war, starte ihn neu
+    if IsAttacking then
+        StopAutoFarm()
+        task.wait(1)
+        StartAutoFarm()
     end
-    
-    task.spawn(function()
-        scanInstance(game:GetService("ReplicatedStorage"))
-        
-        -- Auf neue Remotes überwachen
-        game.DescendantAdded:Connect(function(instance)
-            if instance:IsA("RemoteEvent") then
-                recordRemote(instance, "RemoteEvent")
-            elseif instance:IsA("RemoteFunction") then
-                recordRemote(instance, "RemoteFunction")
-            end
-        end)
-    end)
-    
-    -- Timer für regelmäßige Überprüfungen
-    task.spawn(function()
-        while true do
-            task.wait(settings.refreshRate)
-            updateGUI()
-        end
-    end)
-    
-    print("Improved Remote Spy wurde gestartet! " .. RSpY.remoteCount .. " Remotes wurden gefunden.")
-end
+end)
 
--- Starte Remote Spy
-RSpY.init()
+-- Starte den Bot automatisch beim Laden des Scripts
+-- Entferne den Kommentar, wenn der Bot sofort starten soll
+-- StartAutoFarm()
 
-return RSpY
+Debug("Script geladen! Drücke STRG+F, um den Auto-Farm zu aktivieren/deaktivieren.")
