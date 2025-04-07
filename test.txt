@@ -1,247 +1,283 @@
--- Auto-Farm Bot für Roblox
--- Dieses Script automatisiert das Farmen von Mobs
+-- Mob Attack Script with Hitbox Expander
+-- This script positions the player 15 studs above mobs and attacks them automatically
+-- Also includes an advanced hitbox expander with GUI toggle
 
--- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
--- Variablen
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-local Camera = workspace.CurrentCamera
 
--- Konfiguration
-local CONFIG = {
-    HOVER_HEIGHT = 15, -- Höhe über dem Mob
-    AUTO_ATTACK = true, -- Automatisch angreifen aktivieren
-    CLICK_INTERVAL = {0.05, 0.15}, -- Zufälliges Intervall für menschlicheres Timing
-    TARGET_MOB_TYPE = "Golem", -- Typ des Ziels (z.B. "Golem")
-    HITBOX_SIZE = Vector3.new(10, 10, 10), -- Größe der erweiterten Hitbox
-    DEBUG_MODE = true -- Debug-Modus aktivieren/deaktivieren
-}
+-- Configuration
+local HOVER_HEIGHT = 15 -- Height above mobs in studs
+local ATTACK_DISTANCE = 40 -- Maximum distance to attack mobs
+local HITBOX_SIZE_MULTIPLIER = 3 -- Size multiplier for hitbox expansion
+local isAttacking = false
+local isHitboxExpanded = false
+local selectedMob = nil
 
--- Variablen für Script-Zustand
-local CurrentTarget = nil
-local IsAttacking = false
-local FlyEnabled = false
-local HitboxExpander = nil
-
--- Debug-Funktion
-local function Debug(message)
-    if CONFIG.DEBUG_MODE then
-        print("[Auto-Farm] " .. message)
-    end
+-- Debug function
+local function DebugPrint(message)
+    print("[MOB ATTACKER] " .. message)
 end
 
--- Finde den nächsten Mob
-local function FindNearestMob()
-    local nearestMob = nil
-    local shortestDistance = math.huge
+DebugPrint("Script started")
+
+-- Create GUI for mobile controls
+local function CreateGUI()
+    DebugPrint("Creating GUI...")
     
-    -- Überprüfe, ob der Mobs-Ordner existiert
-    if not workspace:FindFirstChild("Mobs") then
-        Debug("Keine Mobs gefunden!")
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "MobAttackerGUI"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+    
+    local Frame = Instance.new("Frame")
+    Frame.Name = "ControlFrame"
+    Frame.Size = UDim2.new(0, 200, 0, 100)
+    Frame.Position = UDim2.new(0.8, -100, 0.8, -50)
+    Frame.BackgroundTransparency = 0.5
+    Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    Frame.BorderSizePixel = 2
+    Frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    Frame.Parent = ScreenGui
+    
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Name = "ToggleAttackButton"
+    ToggleButton.Size = UDim2.new(0.9, 0, 0.4, 0)
+    ToggleButton.Position = UDim2.new(0.05, 0, 0.05, 0)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.Text = "Attack: OFF"
+    ToggleButton.Font = Enum.Font.SourceSansBold
+    ToggleButton.TextSize = 18
+    ToggleButton.Parent = Frame
+    
+    local HitboxButton = Instance.new("TextButton")
+    HitboxButton.Name = "HitboxButton"
+    HitboxButton.Size = UDim2.new(0.9, 0, 0.4, 0)
+    HitboxButton.Position = UDim2.new(0.05, 0, 0.55, 0)
+    HitboxButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    HitboxButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    HitboxButton.Text = "Hitbox: OFF"
+    HitboxButton.Font = Enum.Font.SourceSansBold
+    HitboxButton.TextSize = 18
+    HitboxButton.Parent = Frame
+    
+    -- Toggle attack button
+    ToggleButton.MouseButton1Click:Connect(function()
+        isAttacking = not isAttacking
+        ToggleButton.Text = isAttacking and "Attack: ON" or "Attack: OFF"
+        ToggleButton.BackgroundColor3 = isAttacking and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        DebugPrint("Attack toggled: " .. tostring(isAttacking))
+    end)
+    
+    -- Toggle hitbox button
+    HitboxButton.MouseButton1Click:Connect(function()
+        isHitboxExpanded = not isHitboxExpanded
+        HitboxButton.Text = isHitboxExpanded and "Hitbox: ON" or "Hitbox: OFF"
+        HitboxButton.BackgroundColor3 = isHitboxExpanded and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        ToggleHitboxes(isHitboxExpanded)
+        DebugPrint("Hitbox toggled: " .. tostring(isHitboxExpanded))
+    end)
+    
+    DebugPrint("GUI created successfully")
+    return ScreenGui
+end
+
+-- Function to find the closest mob
+local function FindClosestMob()
+    local Mobs = workspace:FindFirstChild("Mobs")
+    if not Mobs then
+        DebugPrint("Error: Mobs folder not found in workspace")
         return nil
     end
     
-    -- Durchsuche alle Mobs
-    for _, mob in pairs(workspace.Mobs:GetChildren()) do
-        -- Prüfe, ob es sich um den gesuchten Mobtyp handelt
-        if mob.Name:find(CONFIG.TARGET_MOB_TYPE) then
-            -- Prüfe, ob der Mob einen HumanoidRootPart hat
-            local mobHRP = mob:FindFirstChild("HumanoidRootPart")
-            local mobHumanoid = mob:FindFirstChild("Humanoid")
-            
-            if mobHRP and mobHumanoid and mobHumanoid.Health > 0 then
-                local distance = (HumanoidRootPart.Position - mobHRP.Position).Magnitude
+    local closestMob = nil
+    local shortestDistance = ATTACK_DISTANCE
+    
+    for _, mob in pairs(Mobs:GetChildren()) do
+        local mobRoot = mob:FindFirstChild("HumanoidRootPart")
+        if mobRoot and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
+            local distance = (HumanoidRootPart.Position - mobRoot.Position).Magnitude
+            if distance < shortestDistance then
+                closestMob = mob
+                shortestDistance = distance
+                DebugPrint("Found mob: " .. mob.Name .. " at distance: " .. tostring(distance))
+            end
+        end
+    end
+    
+    if closestMob then
+        DebugPrint("Selected mob: " .. closestMob.Name)
+    else
+        DebugPrint("No mobs found within range")
+    end
+    
+    return closestMob
+end
+
+-- Function to handle hitbox expansion
+local function ToggleHitboxes(enabled)
+    local Mobs = workspace:FindFirstChild("Mobs")
+    if not Mobs then
+        DebugPrint("Error: Mobs folder not found in workspace")
+        return
+    end
+    
+    DebugPrint("Toggling hitboxes: " .. tostring(enabled))
+    
+    for _, mob in pairs(Mobs:GetChildren()) do
+        local mobRoot = mob:FindFirstChild("HumanoidRootPart")
+        if mobRoot then
+            -- Reset size
+            if not enabled then
+                if mobRoot:FindFirstChild("OriginalSize") then
+                    local originalSize = mobRoot:FindFirstChild("OriginalSize").Value
+                    mobRoot.Size = originalSize
+                    DebugPrint("Reset hitbox for " .. mob.Name)
+                end
+            -- Expand size
+            else
+                -- Store original size if not already stored
+                if not mobRoot:FindFirstChild("OriginalSize") then
+                    local originalSizeValue = Instance.new("Vector3Value")
+                    originalSizeValue.Name = "OriginalSize"
+                    originalSizeValue.Value = mobRoot.Size
+                    originalSizeValue.Parent = mobRoot
+                end
                 
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    nearestMob = mob
+                -- Expand hitbox
+                mobRoot.Size = mobRoot.Size * HITBOX_SIZE_MULTIPLIER
+                DebugPrint("Expanded hitbox for " .. mob.Name .. " to " .. tostring(mobRoot.Size))
+                
+                -- Make hitbox transparent
+                if mobRoot:IsA("BasePart") then
+                    mobRoot.Transparency = 0.8
+                    mobRoot.CanCollide = false
                 end
             end
         end
     end
-    
-    return nearestMob
 end
 
--- Aktiviere/Deaktiviere Fliegen
-local function ToggleFly(enable)
-    if FlyEnabled == enable then return end
-    
-    FlyEnabled = enable
-    
-    if enable then
-        Debug("Flugmodus aktiviert")
-        -- Implementiere hier deinen Flugmechanismus
-        -- Dies ist ein Beispiel und muss möglicherweise an das spezifische Spiel angepasst werden
-        local Humanoid = Character:FindFirstChild("Humanoid")
-        if Humanoid then
-            Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-            workspace.Gravity = 0
-        end
-    else
-        Debug("Flugmodus deaktiviert")
-        workspace.Gravity = 196.2 -- Standard-Gravitationswert
-        local Humanoid = Character:FindFirstChild("Humanoid")
-        if Humanoid then
-            Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
-    end
-end
-
--- Erstelle oder aktualisiere die erweiterte Hitbox für das Ziel
-local function UpdateHitbox(target)
-    if not target then
-        if HitboxExpander then
-            HitboxExpander:Destroy()
-            HitboxExpander = nil
-        end
+-- Function to position player above mob and attack
+local function PositionAndAttack(mob)
+    if not mob or not mob:FindFirstChild("HumanoidRootPart") then
+        DebugPrint("Error: Invalid mob or missing HumanoidRootPart")
         return
     end
     
-    local targetHRP = target:FindFirstChild("HumanoidRootPart")
-    if not targetHRP then return end
+    local mobRoot = mob:FindFirstChild("HumanoidRootPart")
     
-    if not HitboxExpander then
-        HitboxExpander = Instance.new("Part")
-        HitboxExpander.Name = "HitboxExpander"
-        HitboxExpander.Anchored = false
-        HitboxExpander.CanCollide = false
-        HitboxExpander.Transparency = 0.8 -- Leicht sichtbar für Debugging
-        HitboxExpander.Material = Enum.Material.SmoothPlastic
-        HitboxExpander.Color = Color3.fromRGB(255, 0, 0)
-        
-        -- Weld zum Ziel
-        local Weld = Instance.new("Weld")
-        Weld.Part0 = targetHRP
-        Weld.Part1 = HitboxExpander
-        Weld.C0 = CFrame.new(0, 0, 0)
-        Weld.Parent = HitboxExpander
-        
-        HitboxExpander.Parent = workspace
-    end
+    -- Position player above mob
+    local targetPosition = mobRoot.Position + Vector3.new(0, HOVER_HEIGHT, 0)
+    HumanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(90), 0, 0)
     
-    -- Aktualisiere die Größe und Position
-    HitboxExpander.Size = CONFIG.HITBOX_SIZE
-    HitboxExpander.CFrame = targetHRP.CFrame
+    -- Debug info
+    DebugPrint("Positioned above " .. mob.Name .. " at height: " .. HOVER_HEIGHT)
+    DebugPrint("Player position: " .. tostring(HumanoidRootPart.Position))
+    DebugPrint("Mob position: " .. tostring(mobRoot.Position))
+    
+    -- Attack (simulate left click)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    wait(0.05)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+    
+    DebugPrint("Attack sent")
 end
 
--- Positioniere den Spieler über dem Ziel
-local function PositionOverTarget(target)
-    if not target then return end
+-- Enable flying for the player
+local function EnableFly()
+    DebugPrint("Enabling fly mode")
     
-    local targetHRP = target:FindFirstChild("HumanoidRootPart")
-    if not targetHRP then return end
+    -- Disable gravity
+    Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
     
-    -- Berechne die Position über dem Ziel
-    local targetPosition = targetHRP.Position + Vector3.new(0, CONFIG.HOVER_HEIGHT, 0)
+    -- Set fly properties
+    Humanoid.PlatformStand = true
     
-    -- Positioniere den Spieler
-    HumanoidRootPart.CFrame = CFrame.new(targetPosition) * CFrame.Angles(math.rad(90), 0, 0) -- 90 Grad nach unten schauen
-    
-    -- Kamera ausrichten
-    Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetHRP.Position)
-end
-
--- Simuliere einen Mausklick
-local function SimulateClick()
-    -- Koordinaten des Bildschirmmittelpunkts
-    local screenSize = Camera.ViewportSize
-    local centerX = screenSize.X / 2
-    local centerY = screenSize.Y / 2
-    
-    -- Sende Mausereignis (linke Maustaste drücken und loslassen)
-    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1) -- Drücken
-    task.wait(0.05) -- Kurze Verzögerung
-    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1) -- Loslassen
-    
-    -- Füge eine zufällige Verzögerung hinzu
-    task.wait(math.random(CONFIG.CLICK_INTERVAL[1] * 100, CONFIG.CLICK_INTERVAL[2] * 100) / 100)
-end
-
--- Hauptschleife für den Auto-Farm
-local function StartAutoFarm()
-    if IsAttacking then return end
-    IsAttacking = true
-    Debug("Auto-Farm gestartet")
-    
-    -- Hauptschleife
-    while IsAttacking do
-        -- Finde das nächste Ziel
-        CurrentTarget = FindNearestMob()
-        
-        if CurrentTarget then
-            Debug("Ziel gefunden: " .. CurrentTarget.Name)
-            
-            -- Aktiviere Fliegen
-            ToggleFly(true)
-            
-            -- Erstelle erweiterte Hitbox
-            UpdateHitbox(CurrentTarget)
-            
-            -- Positioniere über dem Ziel
-            PositionOverTarget(CurrentTarget)
-            
-            -- Wenn Auto-Attack aktiviert ist, führe einen Angriff aus
-            if CONFIG.AUTO_ATTACK then
-                SimulateClick()
-            end
-        else
-            Debug("Kein Ziel gefunden, suche weiter...")
-            -- Optionales Verhalten, wenn kein Ziel gefunden wird
-            task.wait(1)
+    -- Make sure character can't fall
+    for _, part in pairs(Character:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
         end
-        
-        -- Pause, um die Hauptschleife nicht zu überlasten
-        task.wait(0.1)
     end
-end
-
--- Stoppe den Auto-Farm
-local function StopAutoFarm()
-    IsAttacking = false
-    ToggleFly(false)
-    UpdateHitbox(nil) -- Entferne Hitbox
-    Debug("Auto-Farm gestoppt")
-end
-
--- Toggle-Funktion für die Aktivierung/Deaktivierung des Bots
-local function ToggleAutoFarm()
-    if IsAttacking then
-        StopAutoFarm()
-    else
-        StartAutoFarm()
-    end
-end
-
--- Ereignisbehandlung für Benutzereingaben (E zum Umschalten)
-local UserInputService = game:GetService("UserInputService")
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
-        ToggleAutoFarm()
-    end
-end)
-
--- Event-Handler für Character-Respawn
-LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-    Character = newCharacter
-    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-    Debug("Charakter respawned, aktualisiere Referenzen")
     
-    -- Wenn der Bot aktiv war, starte ihn neu
-    if IsAttacking then
-        StopAutoFarm()
-        task.wait(1)
-        StartAutoFarm()
+    -- Set flying property
+    Character:WaitForChild("HumanoidRootPart").Anchored = false
+    
+    DebugPrint("Fly mode enabled")
+end
+
+-- Main loop function
+local function MainLoop()
+    DebugPrint("Main loop started")
+    
+    while wait(0.1) do
+        if isAttacking then
+            selectedMob = FindClosestMob()
+            
+            if selectedMob then
+                PositionAndAttack(selectedMob)
+            else
+                DebugPrint("No valid mob found to attack")
+            end
+        end
     end
+end
+
+-- Start the script
+local function StartScript()
+    DebugPrint("Initializing script...")
+    
+    local gui = CreateGUI()
+    EnableFly()
+    
+    -- Start main loop
+    spawn(MainLoop)
+    
+    -- Monitor for mobs
+    RunService.Heartbeat:Connect(function()
+        if isHitboxExpanded then
+            -- Continuously check for new mobs to expand hitboxes
+            local Mobs = workspace:FindFirstChild("Mobs")
+            if Mobs then
+                for _, mob in pairs(Mobs:GetChildren()) do
+                    local mobRoot = mob:FindFirstChild("HumanoidRootPart")
+                    if mobRoot and not mobRoot:FindFirstChild("OriginalSize") then
+                        -- New mob found, expand its hitbox
+                        local originalSizeValue = Instance.new("Vector3Value")
+                        originalSizeValue.Name = "OriginalSize"
+                        originalSizeValue.Value = mobRoot.Size
+                        originalSizeValue.Parent = mobRoot
+                        
+                        -- Expand hitbox
+                        mobRoot.Size = mobRoot.Size * HITBOX_SIZE_MULTIPLIER
+                        if mobRoot:IsA("BasePart") then
+                            mobRoot.Transparency = 0.8
+                            mobRoot.CanCollide = false
+                        end
+                        
+                        DebugPrint("Auto-expanded hitbox for new mob: " .. mob.Name)
+                    end
+                end
+            end
+        end
+    end)
+    
+    DebugPrint("Script fully initialized")
+end
+
+-- Error handling wrapper
+local success, error = pcall(function()
+    StartScript()
 end)
 
--- Starte den Bot automatisch beim Laden des Scripts
--- Entferne den Kommentar, wenn der Bot sofort starten soll
--- StartAutoFarm()
-
-Debug("Script geladen! Drücke STRG+F, um den Auto-Farm zu aktivieren/deaktivieren.")
+if not success then
+    DebugPrint("Script error: " .. tostring(error))
+end
