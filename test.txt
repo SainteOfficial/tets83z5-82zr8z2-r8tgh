@@ -2,19 +2,38 @@
 -- Version 4.0 mit schnelleren Reaktionszeiten und besserer Positionierung
 -- Erweitert: Bessere Überlebenschancen, Ausweichmechanismus und Vorausberechnung
 
--- Services laden (mit Fehlerprüfung)
-local Players = game:GetService("Players") or error("Players service nicht verfügbar")
-local RunService = game:GetService("RunService") or error("RunService nicht verfügbar")
-local UserInputService = game:GetService("UserInputService") or error("UserInputService nicht verfügbar")
-local VirtualInputManager = game:GetService("VirtualInputManager") or error("VirtualInputManager nicht verfügbar")
-local TweenService = game:GetService("TweenService") or error("TweenService nicht verfügbar")
-local ReplicatedStorage = game:GetService("ReplicatedStorage") or error("ReplicatedStorage nicht verfügbar")
+-- Fehlerbehandlung für den gesamten Script
+local success, errorMsg = pcall(function()
+
+-- Services laden (mit sicherer Fehlerprüfung)
+local Players = game:GetService("Players")
+if not Players then warn("Players service nicht verfügbar") return end
+
+local RunService = game:GetService("RunService") 
+if not RunService then warn("RunService nicht verfügbar") return end
+
+local UserInputService = game:GetService("UserInputService")
+if not UserInputService then warn("UserInputService nicht verfügbar") return end
+
+local VirtualInputManager = game:GetService("VirtualInputManager")
+if not VirtualInputManager then warn("VirtualInputManager nicht verfügbar, nutze Fallback...") end
+
+local TweenService = game:GetService("TweenService")
+if not TweenService then warn("TweenService nicht verfügbar") return end
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+if not ReplicatedStorage then warn("ReplicatedStorage nicht verfügbar") return end
 
 -- Player und wichtige Variablen (mit Fehlerprüfung)
 local Player = Players.LocalPlayer 
 if not Player then
-    error("LocalPlayer nicht gefunden - Script kann nicht fortfahren")
-    return -- Beende Script
+    warn("LocalPlayer nicht gefunden - Warte auf Spieler...")
+    
+    -- Warte auf Spieler
+    while not Players.LocalPlayer do
+        wait(0.1)
+    end
+    Player = Players.LocalPlayer
 end
 
 -- Erweiterte Konfiguration
@@ -100,6 +119,15 @@ local function SetupCharacter(char)
     
     -- Gesundheitsüberwachung für Ausweichmechanismus
     if Humanoid then
+        -- Existierende Verbindung entfernen, falls vorhanden
+        for i, conn in ipairs(STATE.connections) do
+            if conn.Name == "HealthChanged" then
+                conn:Disconnect()
+                table.remove(STATE.connections, i)
+                break
+            end
+        end
+        
         local healthChangedConn = Humanoid.HealthChanged:Connect(function(health)
             -- Ausweichen bei niedriger Gesundheit
             if CONFIG.AUTO_DODGE and health < (STATE.playerMaxHealth * (CONFIG.DODGE_THRESHOLD / 100)) 
@@ -107,6 +135,7 @@ local function SetupCharacter(char)
                 PerformEmergencyDodge()
             end
         end)
+        healthChangedConn.Name = "HealthChanged"
         table.insert(STATE.connections, healthChangedConn)
     end
     
@@ -114,8 +143,11 @@ local function SetupCharacter(char)
 end
 
 -- Verbindung hinzufügen mit Prüfung
-local function AddConnection(connection)
+local function AddConnection(connection, name)
     if connection then
+        if name then
+            connection.Name = name
+        end
         table.insert(STATE.connections, connection)
         return connection
     end
@@ -123,8 +155,11 @@ local function AddConnection(connection)
     return nil
 end
 
+-- Forward-Deklaration für Funktionen, die sich gegenseitig referenzieren
+local PerformEmergencyDodge
+
 -- Neuer Notfall-Ausweichmechanismus
-local function PerformEmergencyDodge()
+PerformEmergencyDodge = function()
     if STATE.dodgeInProgress or not HumanoidRootPart or not Humanoid then return end
     
     STATE.dodgeInProgress = true
@@ -186,9 +221,12 @@ local function CreateGUI()
     DebugPrint("Erstelle GUI...")
     
     -- Prüfe, ob GUI bereits existiert
-    if Player:FindFirstChild("PlayerGui") and Player.PlayerGui:FindFirstChild("MobAttackerGUI") then
-        Player.PlayerGui.MobAttackerGUI:Destroy()
-        DebugPrint("Alte GUI entfernt")
+    if Player:FindFirstChild("PlayerGui") then
+        local existingGui = Player.PlayerGui:FindFirstChild("MobAttackerGUI")
+        if existingGui then
+            existingGui:Destroy()
+            DebugPrint("Alte GUI entfernt")
+        end
     end
     
     -- Schütze vor Fehlern
@@ -316,62 +354,10 @@ local function CreateGUI()
         DodgeCorner.CornerRadius = UDim.new(0, 6)
         DodgeCorner.Parent = DodgeButton
         
-        -- Button-Click-Effekte
-        AttackButton.MouseButton1Click:Connect(function()
-            STATE.isAttacking = not STATE.isAttacking
-            
-            -- Visuelles Feedback
-            local goalColor = STATE.isAttacking and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(220, 50, 50)
-            local buttonTween = TweenService:Create(AttackButton, TweenInfo.new(0.3), {BackgroundColor3 = goalColor})
-            buttonTween:Play()
-            
-            AttackButton.Text = STATE.isAttacking and "Angriff: AN" or "Angriff: AUS"
-            StatusLabel.Text = STATE.isAttacking and "Suche Mobs..." or "Bereit"
-            
-            -- Einfacher Ripple-Effekt
-            local ripple = Instance.new("Frame")
-            ripple.Name = "Ripple"
-            ripple.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            ripple.BackgroundTransparency = 0.7
-            ripple.BorderSizePixel = 0
-            ripple.Position = UDim2.new(0.5, 0, 0.5, 0)
-            ripple.AnchorPoint = Vector2.new(0.5, 0.5)
-            ripple.Size = UDim2.new(0, 0, 0, 0)
-            ripple.ZIndex = 2
-            
-            -- Rundung für Ripple
-            local rippleCorner = Instance.new("UICorner")
-            rippleCorner.CornerRadius = UDim.new(1, 0)
-            rippleCorner.Parent = ripple
-            
-            ripple.Parent = AttackButton
-            
-            local targetSize = UDim2.new(2, 0, 2, 0)
-            local rippleTween = TweenService:Create(ripple, TweenInfo.new(0.5), {Size = targetSize, BackgroundTransparency = 1})
-            rippleTween:Play()
-            
-            delay(0.5, function()
-                ripple:Destroy()
-            end)
-            
-            -- Bei Aktivierung Fly-Modus aktivieren
-            if STATE.isAttacking then
-                EnableImprovedFly()
-            end
-            
-            DebugPrint("Angriffsmodus: " .. tostring(STATE.isAttacking))
-        end)
+        -- Button-Click-Effekte und Event-Handler (mit Schutz vor Fehlern)
+        local ButtonConnections = {}
         
-        HitboxButton.MouseButton1Click:Connect(function()
-            STATE.isHitboxExpanded = not STATE.isHitboxExpanded
-            
-            -- Visuelles Feedback
-            local goalColor = STATE.isHitboxExpanded and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(220, 50, 50)
-            local buttonTween = TweenService:Create(HitboxButton, TweenInfo.new(0.3), {BackgroundColor3 = goalColor})
-            buttonTween:Play()
-            
-            HitboxButton.Text = STATE.isHitboxExpanded and "Hitbox: AN" or "Hitbox: AUS"
-            
+        local function CreateRippleEffect(button)
             -- Einfacher Ripple-Effekt
             local ripple = Instance.new("Frame")
             ripple.Name = "Ripple"
@@ -388,7 +374,7 @@ local function CreateGUI()
             rippleCorner.CornerRadius = UDim.new(1, 0)
             rippleCorner.Parent = ripple
             
-            ripple.Parent = HitboxButton
+            ripple.Parent = button
             
             local targetSize = UDim2.new(2, 0, 2, 0)
             local rippleTween = TweenService:Create(ripple, TweenInfo.new(0.5), {Size = targetSize, BackgroundTransparency = 1})
@@ -399,15 +385,63 @@ local function CreateGUI()
                     ripple:Destroy()
                 end
             end)
+        end
+        
+        -- Forward-Deklaration für Toggle-Funktionen
+        local ToggleHitboxes, EnableImprovedFly
+        
+        -- Angriff Button Handler
+        local attackClickConn
+        attackClickConn = AttackButton.MouseButton1Click:Connect(function()
+            STATE.isAttacking = not STATE.isAttacking
+            
+            -- Visuelles Feedback
+            local goalColor = STATE.isAttacking and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(220, 50, 50)
+            local buttonTween = TweenService:Create(AttackButton, TweenInfo.new(0.3), {BackgroundColor3 = goalColor})
+            buttonTween:Play()
+            
+            AttackButton.Text = STATE.isAttacking and "Angriff: AN" or "Angriff: AUS"
+            StatusLabel.Text = STATE.isAttacking and "Suche Mobs..." or "Bereit"
+            
+            CreateRippleEffect(AttackButton)
+            
+            -- Bei Aktivierung Fly-Modus aktivieren
+            if STATE.isAttacking and EnableImprovedFly then
+                EnableImprovedFly()
+            end
+            
+            DebugPrint("Angriffsmodus: " .. tostring(STATE.isAttacking))
+        end)
+        
+        table.insert(ButtonConnections, attackClickConn)
+        
+        -- Hitbox Button Handler
+        local hitboxClickConn
+        hitboxClickConn = HitboxButton.MouseButton1Click:Connect(function()
+            STATE.isHitboxExpanded = not STATE.isHitboxExpanded
+            
+            -- Visuelles Feedback
+            local goalColor = STATE.isHitboxExpanded and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(220, 50, 50)
+            local buttonTween = TweenService:Create(HitboxButton, TweenInfo.new(0.3), {BackgroundColor3 = goalColor})
+            buttonTween:Play()
+            
+            HitboxButton.Text = STATE.isHitboxExpanded and "Hitbox: AN" or "Hitbox: AUS"
+            
+            CreateRippleEffect(HitboxButton)
             
             -- Hitboxen aktivieren/deaktivieren
-            ToggleHitboxes(STATE.isHitboxExpanded)
+            if ToggleHitboxes then
+                ToggleHitboxes(STATE.isHitboxExpanded)
+            end
             
             DebugPrint("Hitbox-Modus: " .. tostring(STATE.isHitboxExpanded))
         end)
         
+        table.insert(ButtonConnections, hitboxClickConn)
+        
         -- NEU: Ausweichbutton-Effekt
-        DodgeButton.MouseButton1Click:Connect(function()
+        local dodgeClickConn
+        dodgeClickConn = DodgeButton.MouseButton1Click:Connect(function()
             PerformEmergencyDodge()
             
             -- Visuelles Feedback
@@ -415,40 +449,29 @@ local function CreateGUI()
             local buttonTween = TweenService:Create(DodgeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(100, 200, 255)})
             buttonTween:Play()
             
-            local ripple = Instance.new("Frame")
-            ripple.Name = "DodgeRipple"
-            ripple.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            ripple.BackgroundTransparency = 0.7
-            ripple.BorderSizePixel = 0
-            ripple.Position = UDim2.new(0.5, 0, 0.5, 0)
-            ripple.AnchorPoint = Vector2.new(0.5, 0.5)
-            ripple.Size = UDim2.new(0, 0, 0, 0)
-            ripple.ZIndex = 2
-            
-            local rippleCorner = Instance.new("UICorner")
-            rippleCorner.CornerRadius = UDim.new(1, 0)
-            rippleCorner.Parent = ripple
-            
-            ripple.Parent = DodgeButton
-            
-            local targetSize = UDim2.new(2, 0, 2, 0)
-            local rippleTween = TweenService:Create(ripple, TweenInfo.new(0.5), {Size = targetSize, BackgroundTransparency = 1})
-            rippleTween:Play()
+            CreateRippleEffect(DodgeButton)
             
             delay(0.5, function()
-                ripple:Destroy()
                 TweenService:Create(DodgeButton, TweenInfo.new(0.3), {BackgroundColor3 = origColor}):Play()
             end)
         end)
         
-        -- Elemente speichern
+        table.insert(ButtonConnections, dodgeClickConn)
+        
+        -- Connections speichern
+        for _, conn in ipairs(ButtonConnections) do
+            table.insert(STATE.connections, conn)
+        end
+        
+        -- Elemente speichern und zurückgeben
         return {
             ScreenGui = ScreenGui, 
             StatusLabel = StatusLabel,
             MobInfoLabel = MobInfoLabel,
             AttackButton = AttackButton,
             HitboxButton = HitboxButton,
-            DodgeButton = DodgeButton
+            DodgeButton = DodgeButton,
+            Connections = ButtonConnections
         }
     end)
     
@@ -511,8 +534,70 @@ local function FindClosestMob()
     -- Mobs-Ordner finden
     local Mobs = workspace:FindFirstChild("Mobs")
     if not Mobs then
-        DebugPrint("FEHLER: Mobs-Ordner nicht gefunden in workspace")
-        return nil
+        DebugPrint("FEHLER: Mobs-Ordner nicht gefunden in workspace, suche alternative Orte...")
+        
+        -- Alternative Orte für Mobs suchen
+        local alternativeFolders = {"Enemies", "NPCs", "Monsters", "Creatures"}
+        for _, folderName in ipairs(alternativeFolders) do
+            Mobs = workspace:FindFirstChild(folderName)
+            if Mobs then
+                DebugPrint("Alternative Mobs gefunden in: " .. folderName)
+                break
+            end
+        end
+        
+        if not Mobs then
+            -- Letzte Option: Direkt im Workspace nach Humanoid-Charakteren suchen
+            DebugPrint("Keine expliziten Mob-Ordner gefunden, suche direkt im Workspace...")
+            local candidates = {}
+            
+            for _, obj in pairs(workspace:GetChildren()) do
+                if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj ~= Character then
+                    local humanoid = obj:FindFirstChild("Humanoid")
+                    local root = obj:FindFirstChild("HumanoidRootPart")
+                    
+                    if humanoid and root and humanoid.Health > 0 then
+                        local playerPosition = HumanoidRootPart.Position
+                        local distance = (playerPosition - root.Position).Magnitude
+                        
+                        if distance < CONFIG.ATTACK_DISTANCE then
+                            table.insert(candidates, {
+                                mob = obj,
+                                distance = distance,
+                                priority = CONFIG.PRIORITY_TARGETING and CalculateMobPriority(obj) or 0,
+                                health = humanoid.Health,
+                                maxHealth = humanoid.MaxHealth,
+                                position = root.Position
+                            })
+                        end
+                    end
+                end
+            end
+            
+            if #candidates > 0 then
+                -- Sortieren und besten Kandidaten auswählen
+                table.sort(candidates, function(a, b)
+                    local scoreA = a.distance - (a.priority * 5)
+                    local scoreB = b.distance - (b.priority * 5)
+                    return scoreA < scoreB
+                end)
+                
+                local bestCandidate = candidates[1]
+                
+                -- GUI aktualisieren
+                if STATE.guiElements.MobInfoLabel then
+                    STATE.guiElements.MobInfoLabel.Text = bestCandidate.mob.Name .. 
+                        " | HP: " .. math.floor(bestCandidate.health) .. "/" .. math.floor(bestCandidate.maxHealth) ..
+                        " | " .. math.floor(bestCandidate.distance) .. "m"
+                end
+                
+                STATE.mobHealthCache[bestCandidate.mob] = bestCandidate.health
+                
+                return bestCandidate.mob, bestCandidate.position
+            end
+            
+            return nil
+        end
     end
     
     local candidates = {}
@@ -521,337 +606,302 @@ local function FindClosestMob()
     -- Sichere Iteration durch Mobs
     for _, mob in pairs(Mobs:GetChildren()) do
         if mob and mob:IsA("Model") then
-            local mobRoot = mob:FindFirstChild("HumanoidRootPart")
-            local mobHumanoid = mob:FindFirstChild("Humanoid")
-            
-            if mobRoot and mobHumanoid and mobHumanoid.Health > 0 then
-                -- Distanz mit pcall berechnen
-                local success, distance = pcall(function()
-                    return (playerPosition - mobRoot.Position).Magnitude
-                end)
-                
-                if success and distance < CONFIG.ATTACK_DISTANCE then
-                    -- Cooldown-Check
-                    local onCooldown = false
-                    if STATE.mobAttackCooldown[mob] and tick() - STATE.mobAttackCooldown[mob] < 1.5 then
-                        onCooldown = true
-                    end
-                    
-                    if not onCooldown then
-                        -- Mob-Bewegung vorhersagen
-                        local predictedPosition = mobRoot.Position
-                        
-                        if CONFIG.PREDICT_MOVEMENT then
-                            -- Einfache lineare Vorhersage basierend auf aktueller Geschwindigkeit
-                            if mobRoot.Velocity.Magnitude > 1 then
-                                predictedPosition = mobRoot.Position + (mobRoot.Velocity * 0.2)
-                            end
-                        end
-                        
-                        -- Berechnete Distanz zur vorhergesagten Position
-                        local predictedDistance = (playerPosition - predictedPosition).Magnitude
-                        
-                        -- Mob-Priorität berechnen
-                        local priority = CONFIG.PRIORITY_TARGETING and CalculateMobPriority(mob) or 0
-                        
-                        -- Auf die Kandidatenliste setzen
-                        table.insert(candidates, {
-                            mob = mob,
-                            distance = predictedDistance,
-                            priority = priority,
-                            health = mobHumanoid.Health,
-                            maxHealth = mobHumanoid.MaxHealth,
-                            position = predictedPosition
-                        })
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Keine Mobs gefunden
-    if #candidates == 0 then
-        return nil
-    end
-    
-    -- Mobs nach kombinierten Faktoren sortieren (Distanz & Priorität)
-    table.sort(candidates, function(a, b)
-        -- Priorisiere nach einer Kombination aus Distanz und Priorität
-        local scoreA = a.distance - (a.priority * 5)
-        local scoreB = b.distance - (b.priority * 5)
-        return scoreA < scoreB
-    end)
-    
-    -- Besten Mob auswählen
-    local bestCandidate = candidates[1]
-    
-    -- Mob-Info für GUI aktualisieren
-    if STATE.guiElements.MobInfoLabel then
-        STATE.guiElements.MobInfoLabel.Text = bestCandidate.mob.Name .. 
-            " | HP: " .. math.floor(bestCandidate.health) .. "/" .. math.floor(bestCandidate.maxHealth) ..
-            " | " .. math.floor(bestCandidate.distance) .. "m"
-    end
-    
-    -- Aktualisiere Mob-Gesundheitscache
-    STATE.mobHealthCache[bestCandidate.mob] = bestCandidate.health
-    
-    if bestCandidate.mob then
-        DebugPrint("Mob gefunden: " .. bestCandidate.mob.Name .. 
-                   " | Distanz: " .. math.floor(bestCandidate.distance) .. 
-                   " | Priorität: " .. bestCandidate.priority)
-    end
-    
-    return bestCandidate.mob, bestCandidate.position
-end
-
--- Hitbox-Funktion mit Fehlerprüfung und verbesserter Visualisierung
-local function ToggleHitboxes(enabled)
-    -- Sicherstellen, dass der Parameter korrekt ist
-    enabled = (enabled == true)
-    
-    local Mobs = workspace:FindFirstChild("Mobs")
-    if not Mobs then
-        DebugPrint("FEHLER: Mobs-Ordner nicht gefunden")
-        return
-    end
-    
-    DebugPrint("Hitboxen werden " .. (enabled and "aktiviert" : "deaktiviert"))
-    
-    for _, mob in pairs(Mobs:GetChildren()) do
-        -- Sichere Verarbeitung jedes Mobs
-        if mob and mob:IsA("Model") then
-            pcall(function()
+            -- Sichere Suche nach mobRoot
+            local success, result = pcall(function()
                 local mobRoot = mob:FindFirstChild("HumanoidRootPart")
-                if mobRoot then
-                    -- Ursprüngliche Größe wiederherstellen
-                    if not enabled then
-                        local originalSize = mobRoot:FindFirstChild("OriginalSize")
-                        -- Fortsetzung der ToggleHitboxes Funktion
-                        if originalSize then
-                            -- Ursprüngliche Größe zurücksetzen
-                            mobRoot.Size = originalSize.Value
-                            originalSize:Destroy()
-                        end
-                        
-                        -- Hitbox-Visualisierung entfernen
-                        local visualizer = mobRoot:FindFirstChild("HitboxVisualizer")
-                        if visualizer then
-                            visualizer:Destroy()
-                        end
-                    else
-                        -- Originalgröße speichern, falls noch nicht geschehen
-                        if not mobRoot:FindFirstChild("OriginalSize") then
-                            local originalSize = Instance.new("Vector3Value")
-                            originalSize.Name = "OriginalSize"
-                            originalSize.Value = mobRoot.Size
-                            originalSize.Parent = mobRoot
-                        end
-                        
-                        -- Hitbox vergrößern
-                        mobRoot.Size = mobRoot.Size * CONFIG.HITBOX_SIZE_MULTIPLIER
-                        
-                        -- Visualisierung hinzufügen, wenn sie nicht existiert
-                        if not mobRoot:FindFirstChild("HitboxVisualizer") then
-                            local visualizer = Instance.new("SelectionBox")
-                            visualizer.Name = "HitboxVisualizer"
-                            visualizer.Adornee = mobRoot
-                            visualizer.Color3 = Color3.fromRGB(255, 50, 50)
-                            visualizer.LineThickness = 0.02
-                            visualizer.Transparency = 0.7
-                            visualizer.Parent = mobRoot
-                        end
-                    end
+                local mobHumanoid = mob:FindFirstChild("Humanoid")
+                
+                if mobRoot and mobHumanoid and mobHumanoid.Health > 0 then
+                    -- Distanz mit pcall berechnen
+                    local distance = (playerPosition - mobRoot.Position).Magnitude
                     
-                    -- Keine Kollision mit Spieler
-                    if mobRoot:FindFirstChild("CanCollide") then
-                        mobRoot.CanCollide = not enabled
+                    if distance < CONFIG.ATTACK_DISTANCE then
+                        -- Cooldown-Check
+                        local onCooldown = false
+                        if STATE.mobAttackCooldown[mob] and tick() - STATE.mobAttackCooldown[mob] < 1.5 then
+                            onCooldown = true
+                        end
+                        
+                        if not onCooldown then
+                            -- Mob-Bewegung vorhersagen
+                            local predictedPosition = mobRoot.Position
+                            
+                            if CONFIG.PREDICT_MOVEMENT then
+                                -- Einfache lineare Vorhersage basierend auf aktueller Geschwindigkeit
+                                if mobRoot.Velocity.Magnitude > 1 then
+                                    predictedPosition = mobRoot.Position + (mobRoot.Velocity * 0.2)
+                                end
+                            end
+                            
+                            -- Berechnete Distanz zur vorhergesagten Position
+                            local predictedDistance = (playerPosition - predictedPosition).Magnitude
+                            
+                            -- Mob-Priorität berechnen
+                            local priority = CONFIG.PRIORITY_TARGETING and CalculateMobPriority(mob) or 0
+                            
+                            -- Auf die Kandidatenliste setzen
+                            table.insert(candidates, {
+                                mob = mob,
+                                distance = predictedDistance,
+                                priority = priority,
+                                health = mobHumanoid.Health,
+                                maxHealth = mobHumanoid.MaxHealth,
+                                position = predictedPosition
+                            })
+                        end
                     end
                 end
             end)
+            
+            if not success then
+                DebugPrint("Fehler bei Mob-Prüfung: " .. tostring(result))
+            end
         end
     end
     
-    DebugPrint("Hitbox-Änderungen abgeschlossen")
-end
-
--- Verbesserter Flug-Modus
-local function EnableImprovedFly()
-    if not HumanoidRootPart or STATE.noClipEnabled then
-        return
-    end
-    
-    STATE.noClipEnabled = true
-    DebugPrint("Verbesserter Flug-Modus aktiviert")
-    
-    -- NoClip-Verbindung erstellen
-    local noClipConn = RunService.Stepped:Connect(function()
-        if not HumanoidRootPart then
-            return
+    -- Sortiere Kandidaten nach einer Kombination aus Distanz und Priorität
+    if #candidates > 0 then
+        -- Sortieren nach Distanz und Priorität (höhere Priorität reduziert den Score)
+        table.sort(candidates, function(a, b)
+            local scoreA = a.distance - (a.priority * 5)
+            local scoreB = b.distance - (b.priority * 5)
+            return scoreA < scoreB
+        end)
+        
+        local bestCandidate = candidates[1]
+        
+        -- GUI aktualisieren
+        if STATE.guiElements.MobInfoLabel then
+            STATE.guiElements.MobInfoLabel.Text = bestCandidate.mob.Name .. 
+                " | HP: " .. math.floor(bestCandidate.health) .. "/" .. math.floor(bestCandidate.maxHealth) ..
+                " | " .. math.floor(bestCandidate.distance) .. "m"
         end
         
-        pcall(function()
-            -- NoClip für alle Character-Teile aktivieren
-            for _, part in pairs(Character:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
-            end
-        end)
-    end)
+        -- Health-Informationen cachen
+        STATE.mobHealthCache[bestCandidate.mob] = bestCandidate.health
+        
+        return bestCandidate.mob, bestCandidate.position
+    end
     
-    table.insert(STATE.connections, noClipConn)
+    -- Keine geeigneten Mobs gefunden
+    if STATE.guiElements.MobInfoLabel then
+        STATE.guiElements.MobInfoLabel.Text = "Kein Mob in Reichweite"
+    end
+    
+    return nil
 end
 
--- Verbesserte Mob-Angriffslogik
+-- Verbesserte Funktion zum Angreifen des Mobs
 local function AttackMob(mob, predictedPosition)
-    if not mob or not HumanoidRootPart or not Character then
+    -- Sicherheitschecks
+    if not mob or not Character or not HumanoidRootPart or not Humanoid then
         return false
     end
     
-    -- Mob-Komponenten finden
+    STATE.selectedMob = mob
+    
+    -- Sichere Root-Abrufe
     local mobRoot = mob:FindFirstChild("HumanoidRootPart")
-    if not mobRoot then 
-        return false 
+    if not mobRoot then
+        DebugPrint("FEHLER: Mob hat keinen HumanoidRootPart")
+        return false
     end
     
-    -- Positionierung über dem Mob mit Tween
-    local targetPosition = mobRoot.Position + Vector3.new(0, CONFIG.HOVER_HEIGHT, 0)
+    local mobPosition = predictedPosition or mobRoot.Position
     
-    -- Bei Vorhersage anpassen
-    if predictedPosition then
-        targetPosition = predictedPosition + Vector3.new(0, CONFIG.HOVER_HEIGHT, 0)
+    -- Bessere Angriffsposition (über dem Mob)
+    local targetPosition = mobPosition + Vector3.new(0, CONFIG.HOVER_HEIGHT, 0)
+    
+    -- Schnellere Bewegung zum Ziel
+    if HumanoidRootPart then
+        -- Mit Tween für sanftere Bewegung
+        local moveTween = TweenService:Create(
+            HumanoidRootPart,
+            TweenInfo.new(CONFIG.POSITION_SPEED, Enum.EasingStyle.Quad),
+            {CFrame = CFrame.new(targetPosition, mobPosition)}
+        )
+        moveTween:Play()
     end
     
-    -- Geschmeidigere Bewegung zum Ziel
-    local moveTween = TweenService:Create(
-        HumanoidRootPart, 
-        TweenInfo.new(CONFIG.POSITION_SPEED, Enum.EasingStyle.Quad), 
-        {CFrame = CFrame.new(targetPosition, mobRoot.Position)}
-    )
+    -- Cooldown für diesen Mob setzen
+    STATE.mobAttackCooldown[mob] = tick()
     
-    moveTween:Play()
-    
-    -- Angriffsversuch mit Error-Handling
-    pcall(function()
-        -- Angriffsanimation aktivieren
-        if Humanoid and Humanoid:FindFirstChildOfClass("Animator") then
-            local animator = Humanoid:FindFirstChildOfClass("Animator")
-            local animations = animator:GetPlayingAnimationTracks()
-            
-            -- Bereits spielende Angriffsanimation stoppen
-            for _, anim in pairs(animations) do
-                if anim.Name:find("Attack") then
-                    anim:Stop()
-                end
-            end
-        end
-        
-        -- Werkzeug zum Angriff nutzen
-        local tool = Character:FindFirstChildOfClass("Tool")
-        if tool then
-            -- Angriffsfunktion aufrufen
-            local attackFunction = tool:FindFirstChild("Attack") or 
-                                   tool:FindFirstChild("AttackFunction") or
-                                   tool:FindFirstChild("Combat")
-                                   
-            if attackFunction and attackFunction:IsA("RemoteEvent") then
-                attackFunction:FireServer()
-                STATE.lastAttackTime = tick()
-                
-                -- Mob in Cooldown setzen
-                STATE.mobAttackCooldown[mob] = tick()
-                
-                return true
-            end
-            
-            -- Alternative: Aktiviere Werkzeug direkt
-            tool:Activate()
-            STATE.lastAttackTime = tick()
-            
-            -- Mob in Cooldown setzen
-            STATE.mobAttackCooldown[mob] = tick()
-            
-            return true
-        else
-            -- Kein Werkzeug gefunden, versuche direkte Kampfmethode
-            local combatRemote = ReplicatedStorage:FindFirstChild("CombatRemote") or
-                                 ReplicatedStorage:FindFirstChild("Combat") or
-                                 ReplicatedStorage:FindFirstChild("AttackEvent")
-                                 
-            if combatRemote and combatRemote:IsA("RemoteEvent") then
-                combatRemote:FireServer(mob)
-                STATE.lastAttackTime = tick()
-                
-                -- Mob in Cooldown setzen
-                STATE.mobAttackCooldown[mob] = tick()
-                
-                return true
-            end
-        end
-    end)
-    
-    return false
-end
-
--- Main-Loop mit verbessertem Error-Handling
-local function StartMainLoop()
-    DebugPrint("Starte Hauptprozess...")
-    
-    -- Hauptschleife
-    local mainLoopConn = RunService.Heartbeat:Connect(function()
+    -- Angriff ausführen
+    if tick() - STATE.lastAttackTime > CONFIG.ATTACK_INTERVAL then
         pcall(function()
-            -- Prüfe Character-Status
-            if not Character or not Character.Parent or not Humanoid or not HumanoidRootPart then
-                -- Charakter verloren, versuche Neueinrichtung
-                if Player.Character and Player.Character ~= Character then
-                    DebugPrint("Charakter hat sich geändert, richte neu ein...")
-                    SetupCharacter(Player.Character)
-                end
-                return
-            end
-            
-            -- Mob-Angriff
-            if STATE.isAttacking then
-                -- Angriffsintervall einhalten
-                if tick() - STATE.lastAttackTime >= CONFIG.ATTACK_INTERVAL then
-                    -- Nächstes Ziel finden
-                    local targetMob, predictedPosition = FindClosestMob()
-                    
-                    if targetMob then
-                        STATE.selectedMob = targetMob
-                        AttackMob(targetMob, predictedPosition)
-                    else
-                        -- Kein Mob gefunden
-                        STATE.selectedMob = nil
-                        if STATE.guiElements.MobInfoLabel then
-                            STATE.guiElements.MobInfoLabel.Text = "Kein Mob in Reichweite"
-                        end
+            -- Virtual Input Manager für Angriff nutzen (mit Fallback)
+            if VirtualInputManager then
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            else
+                -- Fallback: Direktes Auslösen des Angriffs über Remote Events versuchen
+                -- Angriffs-Remote-Events finden und auslösen
+                local possibleEvents = {"Attack", "Combat", "Fight", "DamageEvent"}
+                
+                for _, eventName in ipairs(possibleEvents) do
+                    local event = ReplicatedStorage:FindFirstChild(eventName)
+                    if event and event:IsA("RemoteEvent") then
+                        event:FireServer(mob)
+                        break
                     end
                 end
             end
+            
+            STATE.lastAttackTime = tick()
         end)
-    end)
+    end
     
-    table.insert(STATE.connections, mainLoopConn)
+    return true
 end
 
--- Aufräumfunktion
-local function CleanUp()
-    DebugPrint("Aufräumen gestartet...")
-    
-    -- Verbindungen trennen
-    for _, connection in pairs(STATE.connections) do
-        if typeof(connection) == "RBXScriptConnection" and connection.Connected then
-            connection:Disconnect()
+-- Verbesserte Hitbox-Erweiterung
+ToggleHitboxes = function(enabled)
+    -- Mobs-Ordner finden
+    local Mobs = workspace:FindFirstChild("Mobs")
+    if not Mobs then
+        -- Alternative Orte für Mobs suchen
+        local alternativeFolders = {"Enemies", "NPCs", "Monsters", "Creatures"}
+        for _, folderName in ipairs(alternativeFolders) do
+            Mobs = workspace:FindFirstChild(folderName)
+            if Mobs then break end
+        end
+        
+        if not Mobs then
+            DebugPrint("Keine Mobs gefunden für Hitbox-Erweiterung")
+            return
         end
     end
     
-    -- Hitboxen zurücksetzen
-    ToggleHitboxes(false)
+    -- Durch alle Mobs iterieren
+    for _, mob in pairs(Mobs:GetChildren()) do
+        if mob and mob:IsA("Model") then
+            local mobRoot = mob:FindFirstChild("HumanoidRootPart")
+            if mobRoot then
+                pcall(function()
+                    if enabled then
+                        -- Größere Hitbox für bessere Trefferchancen
+                        mobRoot.Size = Vector3.new(
+                            mobRoot.Size.X * CONFIG.HITBOX_SIZE_MULTIPLIER,
+                            mobRoot.Size.Y * CONFIG.HITBOX_SIZE_MULTIPLIER, 
+                            mobRoot.Size.Z * CONFIG.HITBOX_SIZE_MULTIPLIER
+                        )
+                        mobRoot.Transparency = 0.5 -- Semitransparent für visuelle Rückmeldung
+                        mobRoot.CanCollide = false -- Verhindert Kollisionen mit vergrößerter Hitbox
+                    else
+                        -- Hitbox auf Originalzustand zurücksetzen
+                        -- Originalgrößen wiederherstellen (grobe Schätzung)
+                        mobRoot.Size = Vector3.new(
+                            mobRoot.Size.X / CONFIG.HITBOX_SIZE_MULTIPLIER,
+                            mobRoot.Size.Y / CONFIG.HITBOX_SIZE_MULTIPLIER, 
+                            mobRoot.Size.Z / CONFIG.HITBOX_SIZE_MULTIPLIER
+                        )
+                        mobRoot.Transparency = 1 -- Standardtransparenz
+                        mobRoot.CanCollide = true -- Kollisionen wiederherstellen
+                    end
+                end)
+            end
+        end
+    end
+    
+    DebugPrint("Hitboxen " .. (enabled and "erweitert" : "zurückgesetzt"))
+end
+
+-- Verbesserte Fly-Funktion mit Anti-Fall und Kollisionsvermeidung
+EnableImprovedFly = function()
+    if STATE.noClipEnabled then return end
+    
+    STATE.noClipEnabled = true
+    DebugPrint("Verbesserter Flugmodus aktiviert")
+    
+    -- Existierende Flug-Verbindung entfernen, falls vorhanden
+    for i, conn in ipairs(STATE.connections) do
+        if conn.Name == "NoClipLoop" then
+            conn:Disconnect()
+            table.remove(STATE.connections, i)
+            break
+        end
+    end
+    
+    -- NoClip Loop für bessere Beweglichkeit
+    local noClipConn = RunService.Stepped:Connect(function()
+        if not CHARACTER or not HumanoidRootPart or not Humanoid then return end
+        
+        -- Setze CanCollide auf false für alle Teile
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+        
+        -- Automatischer Fall-Schutz
+        if HumanoidRootPart.Position.Y < -5 then
+            -- Bei zu tiefem Fall, nach oben teleportieren
+            HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position.X, 50, HumanoidRootPart.Position.Z)
+        end
+    end)
+    
+    noClipConn.Name = "NoClipLoop"
+    table.insert(STATE.connections, noClipConn)
+end
+
+-- Hauptschleife für den Angriff
+local function StartAttackLoop()
+    DebugPrint("Starte Angriffs-Loop")
+    
+    -- Existierende Angriffs-Verbindung entfernen, falls vorhanden
+    for i, conn in ipairs(STATE.connections) do
+        if conn.Name == "AttackLoop" then
+            conn:Disconnect()
+            table.remove(STATE.connections, i)
+            break
+        end
+    end
+    
+    -- Angriffs-Loop
+    local attackConn = RunService.Heartbeat:Connect(function()
+        if not STATE.isAttacking or STATE.dodgeInProgress then return end
+        
+        -- Sicherstellung, dass Character existiert
+        if not Character or not Character.Parent or not HumanoidRootPart or not Humanoid then
+            return
+        end
+        
+        -- Suche nächsten Mob
+        local mob, predictedPosition = FindClosestMob()
+        
+        -- Wenn Mob gefunden, angreifen
+        if mob then
+            AttackMob(mob, predictedPosition)
+        end
+    end)
+    
+    attackConn.Name = "AttackLoop"
+    table.insert(STATE.connections, attackConn)
+end
+
+-- Funktion zum Aufräumen bei Beendigung
+local function CleanupEverything()
+    DebugPrint("Räume alles auf...")
+    
+    -- Alle Verbindungen trennen
+    for _, conn in ipairs(STATE.connections) do
+        pcall(function()
+            if conn and typeof(conn) == "RBXScriptConnection" then
+                conn:Disconnect()
+            end
+        end)
+    end
     
     -- GUI entfernen
     if STATE.guiElements.ScreenGui then
         STATE.guiElements.ScreenGui:Destroy()
+    end
+    
+    -- Hitboxen zurücksetzen
+    if STATE.isHitboxExpanded then
+        pcall(function()
+            ToggleHitboxes(false)
+        end)
     end
     
     -- Status zurücksetzen
@@ -865,93 +915,211 @@ local function CleanUp()
     DebugPrint("Aufräumen abgeschlossen")
 end
 
--- Tastenbindungen einrichten
-local function SetupKeybinds()
-    DebugPrint("Richte Tastenbindungen ein...")
+-- Hotkey-Unterstützung für schnelle Kontrolle
+local function SetupHotkeys()
+    DebugPrint("Richte Hotkeys ein")
     
-    local keybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Existierende Hotkey-Verbindung entfernen, falls vorhanden
+    for i, conn in ipairs(STATE.connections) do
+        if conn.Name == "HotkeyInput" then
+            conn:Disconnect()
+            table.remove(STATE.connections, i)
+            break
+        end
+    end
+    
+    -- Hotkey-Verbindung
+    local inputConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         
-        if input.KeyCode == Enum.KeyCode.T then
-            -- T-Taste: Angriffsmodus umschalten
+        -- Hotkey für Angriffsmodus toggle (U)
+        if input.KeyCode == Enum.KeyCode.U then
             STATE.isAttacking = not STATE.isAttacking
             
             if STATE.guiElements.AttackButton then
                 STATE.guiElements.AttackButton.Text = STATE.isAttacking and "Angriff: AN" or "Angriff: AUS"
-                STATE.guiElements.AttackButton.BackgroundColor3 = STATE.isAttacking and 
-                    Color3.fromRGB(50, 180, 50) or Color3.fromRGB(220, 50, 50)
+                local goalColor = STATE.isAttacking and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(220, 50, 50)
+                TweenService:Create(STATE.guiElements.AttackButton, TweenInfo.new(0.3), {BackgroundColor3 = goalColor}):Play()
             end
             
             if STATE.guiElements.StatusLabel then
                 STATE.guiElements.StatusLabel.Text = STATE.isAttacking and "Suche Mobs..." or "Bereit"
             end
             
-            DebugPrint("Angriffsmodus umgeschaltet: " .. tostring(STATE.isAttacking))
+            DebugPrint("Angriffsmodus: " .. tostring(STATE.isAttacking))
             
-            -- Bei Aktivierung Fly-Modus starten
-            if STATE.isAttacking and not STATE.noClipEnabled then
+            -- Bei Aktivierung Fly-Modus aktivieren
+            if STATE.isAttacking and EnableImprovedFly then
                 EnableImprovedFly()
             end
-        elseif input.KeyCode == Enum.KeyCode.H then
-            -- H-Taste: Hitbox-Modus umschalten
+        end
+        
+        -- Hotkey für Hitbox toggle (H)
+        if input.KeyCode == Enum.KeyCode.H then
             STATE.isHitboxExpanded = not STATE.isHitboxExpanded
             
             if STATE.guiElements.HitboxButton then
                 STATE.guiElements.HitboxButton.Text = STATE.isHitboxExpanded and "Hitbox: AN" or "Hitbox: AUS"
-                STATE.guiElements.HitboxButton.BackgroundColor3 = STATE.isHitboxExpanded and 
-                    Color3.fromRGB(50, 180, 50) or Color3.fromRGB(220, 50, 50)
+                local goalColor = STATE.isHitboxExpanded and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(220, 50, 50)
+                TweenService:Create(STATE.guiElements.HitboxButton, TweenInfo.new(0.3), {BackgroundColor3 = goalColor}):Play()
             end
             
-            ToggleHitboxes(STATE.isHitboxExpanded)
-            DebugPrint("Hitbox-Modus umgeschaltet: " .. tostring(STATE.isHitboxExpanded))
-        elseif input.KeyCode == Enum.KeyCode.R then
-            -- R-Taste: Notfallausweichen
+            -- Hitboxen aktivieren/deaktivieren
+            if ToggleHitboxes then
+                ToggleHitboxes(STATE.isHitboxExpanded)
+            end
+            
+            DebugPrint("Hitbox-Modus: " .. tostring(STATE.isHitboxExpanded))
+        end
+        
+        -- Hotkey für Notfall-Ausweichen (E)
+        if input.KeyCode == Enum.KeyCode.E then
             PerformEmergencyDodge()
         end
     end)
     
-    table.insert(STATE.connections, keybindConn)
+    inputConn.Name = "HotkeyInput"
+    table.insert(STATE.connections, inputConn)
 end
 
--- INITIALISIERUNG 
-
--- Character einrichten, wenn schon vorhanden
-if Player.Character then
-    SetupCharacter(Player.Character)
+-- Haupt-Initialisierungsfunktion
+local function Initialize()
+    DebugPrint("Initialisiere Mob Controller v4.0...")
+    
+    -- Auf Character warten
+    if not Player.Character then
+        DebugPrint("Warte auf Character...")
+        Player.CharacterAdded:Wait()
+    end
+    
+    local success = SetupCharacter(Player.Character)
+    if not success then
+        DebugPrint("Fehler bei Character-Setup, versuche erneut in 1 Sekunde...")
+        wait(1)
+        success = SetupCharacter(Player.Character)
+        if not success then
+            DebugPrint("Kritischer Fehler: Character-Setup fehlgeschlagen nach mehreren Versuchen.")
+            return
+        end
+    end
+    
+    -- GUI erstellen
+    CreateGUI()
+    
+    -- Hotkeys einrichten
+    SetupHotkeys()
+    
+    -- Character neu laden Event
+    local characterAddedConn = Player.CharacterAdded:Connect(function(newCharacter)
+        DebugPrint("Neuer Character erkannt, initialisiere...")
+        SetupCharacter(newCharacter)
+    end)
+    
+    characterAddedConn.Name = "CharacterAdded"
+    table.insert(STATE.connections, characterAddedConn)
+    
+    -- Angriffs-Loop starten
+    StartAttackLoop()
+    
+    -- Speichern der Character-Info
+    if Humanoid then
+        STATE.playerMaxHealth = Humanoid.MaxHealth
+    end
+    
+    -- Automatische Umgebungserkennung
+    DebugPrint("Überprüfe Spielumgebung...")
+    
+    -- Überprüfe, ob wir in einer PvP-Zone sind
+    local isPvPEnabled = false
+    local pvpZoneTags = {"PvP", "PVP", "Kampfzone", "BattleArena"}
+    
+    for _, tag in ipairs(pvpZoneTags) do
+        if workspace:FindFirstChild(tag) then
+            isPvPEnabled = true
+            break
+        end
+    end
+    
+    if isPvPEnabled then
+        DebugPrint("⚠️ PvP-Zone erkannt! Sei vorsichtig.")
+        CONFIG.AUTO_DODGE = true -- In PvP immer ausweichen aktivieren
+    end
+    
+    -- Überprüfe auf andere Spieler in der Nähe
+    local nearbyPlayers = 0
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+            if distance < 50 then
+                nearbyPlayers = nearbyPlayers + 1
+            end
+        end
+    end
+    
+    STATE.nearbyPlayerCount = nearbyPlayers
+    
+    if nearbyPlayers > 0 then
+        DebugPrint("ℹ️ " .. nearbyPlayers .. " Spieler in der Nähe.")
+    end
+    
+    DebugPrint("Mob Controller v4.0 erfolgreich initialisiert!")
+    
+    -- Erfolgsbenachrichtigung in der GUI
+    if STATE.guiElements.StatusLabel then
+        STATE.guiElements.StatusLabel.Text = "Initialisiert - Bereit!"
+        
+        -- Kurzen Erfolgs-Flash durchführen
+        local originalColor = STATE.guiElements.StatusLabel.TextColor3
+        STATE.guiElements.StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        
+        delay(1, function()
+            if STATE.guiElements.StatusLabel then
+                TweenService:Create(STATE.guiElements.StatusLabel, TweenInfo.new(0.5), 
+                    {TextColor3 = originalColor}):Play()
+            end
+        end)
+    end
 end
 
--- Character-Added-Event
-local characterAddedConn = Player.CharacterAdded:Connect(function(char)
-    DebugPrint("Neuer Character erkannt, richte ein...")
-    SetupCharacter(char)
-end)
-
-table.insert(STATE.connections, characterAddedConn)
-
--- GUI erstellen
-CreateGUI()
-
--- Tastenbindungen einrichten
-SetupKeybinds()
-
--- Main-Loop starten
-StartMainLoop()
-
--- Beenden bei Skript-Neustart oder Entfernung
-local function OnScriptEnd()
-    CleanUp()
-    DebugPrint("Script wurde beendet.")
-end
-
--- Skript-Beendigungserkennung
-local scriptCon
-scriptCon = game:GetService("RunService").Heartbeat:Connect(function()
-    if not script.Parent then
-        scriptCon:Disconnect()
-        OnScriptEnd()
+-- Cleanup bei Script-End hinzufügen
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+    if player == Player then
+        CleanupEverything()
     end
 end)
 
-DebugPrint("Mob Attack Script v4.0 erfolgreich initialisiert!")
+-- Script starten
+Initialize()
 
--- Script-Ende
+end) -- pcall Ende
+
+-- Fehlerbehandlung für den gesamten Script
+if not success then
+    warn("KRITISCHER FEHLER im Mob Attack Script: " .. tostring(errorMsg))
+    
+    -- Versuche, eine Fehlermeldung anzuzeigen
+    pcall(function()
+        local errorGui = Instance.new("ScreenGui")
+        errorGui.Name = "MobAttackErrorGUI"
+        
+        local errorFrame = Instance.new("Frame")
+        errorFrame.Size = UDim2.new(0, 300, 0, 100)
+        errorFrame.Position = UDim2.new(0.5, -150, 0.5, -50)
+        errorFrame.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        errorFrame.Parent = errorGui
+        
+        local errorMsg = Instance.new("TextLabel")
+        errorMsg.Size = UDim2.new(1, -20, 1, -20)
+        errorMsg.Position = UDim2.new(0, 10, 0, 10)
+        errorMsg.Text = "Fehler im Mob Attack Script: Bitte neu starten."
+        errorMsg.TextColor3 = Color3.fromRGB(255, 255, 255)
+        errorMsg.BackgroundTransparency = 1
+        errorMsg.Parent = errorFrame
+        
+        errorGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+        
+        wait(5)
+        errorGui:Destroy()
+    end)
+end
