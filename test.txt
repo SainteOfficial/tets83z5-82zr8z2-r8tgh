@@ -17,7 +17,7 @@ end
 
 -- Konfiguration
 local CONFIG = {
-    HOVER_HEIGHT = 15,
+    HOVER_HEIGHT = 11,
     ATTACK_DISTANCE = 50,
     ATTACK_INTERVAL = 0.2,
     HITBOX_SIZE_MULTIPLIER = 3,
