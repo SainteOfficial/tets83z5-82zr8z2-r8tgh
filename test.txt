@@ -181,56 +181,56 @@ local AutoFarmConfig = {
 -- Initialize Tabs
 local TabDashboard = Window:CreateTab({
     Name = "Dashboard",
-    Icon = "globe",
+    Icon = "view_in_ar",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 local TabAutoFarm = Window:CreateTab({
     Name = "AutoFarm",
-    Icon = "bolt",
+    Icon = "view_in_ar",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 local TabTowers = Window:CreateTab({
     Name = "Towers",
-    Icon = "apartment",
+    Icon = "view_in_ar",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 local TabRaids = Window:CreateTab({
     Name = "Raids",
-    Icon = "groups",
+    Icon = "view_in_ar",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 local TabExploration = Window:CreateTab({
     Name = "Exploration",
-    Icon = "explore",
+    Icon = "view_in_ar",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 local TabShop = Window:CreateTab({
     Name = "Shop",
-    Icon = "shopping_cart",
+    Icon = "view_in_ar",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 local TabMisc = Window:CreateTab({
     Name = "Misc",
-    Icon = "build",
+    Icon = "view_in_ar",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 local TabSettings = Window:CreateTab({
     Name = "Settings",
-    Icon = "settings",
+    Icon = "view_in_ar",
     ImageSource = "Material",
     ShowTitle = true
 })
