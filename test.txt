@@ -366,12 +366,12 @@ TabDashboard:CreateParagraph({
 })
 
 -- AutoFarm Tab
-TabAutoFarm:CreateSection("Gegner-Farm Konfiguration")
+TabAutoFarm:CreateSection("Enemy Farm Configuration")
 
 -- World selection
 local world_dropdown = TabAutoFarm:CreateDropdown({
-    Name = "Welten auswählen",
-    Description = "Wähle die Welten, von denen Gegner gefarmt werden sollen",
+    Name = "Select Worlds",
+    Description = "Choose the worlds to farm enemies from",
     Options = {"Ninja Village", "Green Village", "Shibuya Station", "Titans City", "Dimensional Fortress", "Candy Island", "Solo City"},
     CurrentOption = {"Ninja Village"},
     MultipleOptions = true,
@@ -385,8 +385,8 @@ local world_dropdown = TabAutoFarm:CreateDropdown({
 
 -- Enemy dropdown (will be updated based on world selection)
 local enemy_dropdown = TabAutoFarm:CreateDropdown({
-    Name = "Gegner auswählen",
-    Description = "Wähle die Gegner, die gefarmt werden sollen",
+    Name = "Select Enemies",
+    Description = "Choose the enemies to farm",
     Options = getEnemyDisplayOptions({"unstoppable_fist", "copy_ninja", "awakened_dark_avenger", "awakened_promised_child", "six_paths_of_pain", "bijuu_beast"}),
     CurrentOption = {EnemyDisplayNames["unstoppable_fist"] .. " (unstoppable_fist)"},
     MultipleOptions = true,
@@ -466,12 +466,12 @@ function updateEnemyDropdown(worlds)
 end
 
 TabAutoFarm:CreateDivider()
-TabAutoFarm:CreateSection("Weltbosse")
+TabAutoFarm:CreateSection("World Bosses")
 
 -- World Boss section (moved from Raid tab)
 local world_boss_dropdown = TabAutoFarm:CreateDropdown({
-    Name = "Weltboss auswählen",
-    Description = "Wähle einen Weltboss für den Kampf",
+    Name = "Select World Boss",
+    Description = "Choose a world boss to battle",
     Options = {
         "Naruto Rage Mode (bijuu_beast)",
         "Frieza (awakened_galactic_tyrant)",
@@ -490,8 +490,8 @@ local world_boss_dropdown = TabAutoFarm:CreateDropdown({
 }, "WorldBossSelection")
 
 TabAutoFarm:CreateButton({
-    Name = "Ausgewählten Boss beschwören",
-    Description = "Starte einen Kampf gegen den ausgewählten Weltboss",
+    Name = "Summon Selected Boss",
+    Description = "Start a battle against the selected world boss",
     Callback = function()
         local boss = world_boss_dropdown.CurrentOption
         if type(boss) == "table" then
@@ -506,19 +506,19 @@ TabAutoFarm:CreateButton({
 })
 
 TabAutoFarm:CreateDivider()
-TabAutoFarm:CreateSection("Auto-Farm Optionen")
+TabAutoFarm:CreateSection("Auto Farm Options")
 
 -- Auto Farm All World Bosses toggle
 local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto-Farm alle Weltbosse",
-    Description = "Durchläuft automatisch alle Weltbosse",
+    Name = "Auto Farm All World Bosses",
+    Description = "Automatically cycles through all world bosses",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.AutoFarmAllWorldBosses = Value
         
         if Value then
             -- Start auto farm all bosses
-            Utilities.Notify("Auto-Farm", "Automatisches Farmen aller Weltbosse gestartet", "auto_mode")
+            Utilities.Notify("Auto Farm", "Started auto farming all world bosses", "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarmAllBosses then
@@ -531,20 +531,41 @@ local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
                 
                 while AutoFarmConfig.AutoFarmAllWorldBosses do
                     local bossCode = AutoFarmConfig.WorldBosses[currentBossIndex]
-                    Utilities.SummonEnemy(bossCode)
                     
-                    -- Increment boss index
-                    currentBossIndex = currentBossIndex + 1
-                    if currentBossIndex > #AutoFarmConfig.WorldBosses then
-                        currentBossIndex = 1
+                    -- Try to start battle with current boss
+                    local battleStarted = Utilities.StartNextBattle(bossCode)
+                    
+                    -- If battle started, we need to wait for it to end
+                    if battleStarted then
+                        -- Wait until battle is over and properly dismissed
+                        while Utilities.IsInBattle() or Utilities.IsBattleEnded() do
+                            wait(1)
+                            
+                            -- Automatically dismiss battle end screen if visible
+                            if Utilities.IsBattleEnded() then
+                                Utilities.DismissBattleEnd()
+                            end
+                        end
+                        
+                        -- Battle completed, move to next boss and wait for cooldown
+                        Utilities.Notify("Auto Farm", "Boss battle completed, moving to next boss after cooldown", "timer")
+                        
+                        -- Increment boss index
+                        currentBossIndex = currentBossIndex + 1
+                        if currentBossIndex > #AutoFarmConfig.WorldBosses then
+                            currentBossIndex = 1
+                        end
+                        
+                        wait(AutoFarmConfig.Interval) -- Wait for cooldown
+                    else
+                        -- Failed to start battle or still in a battle/battle-end state, wait a bit and try again
+                        wait(5)
                     end
-                    
-                    wait(AutoFarmConfig.Interval) -- Wait for cooldown
                 end
             end)
         else
             -- Stop auto farm all bosses
-            Utilities.Notify("Auto-Farm", "Automatisches Farmen aller Weltbosse beendet", "stop_circle")
+            Utilities.Notify("Auto Farm", "Stopped auto farming all world bosses", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarmAllBosses then
@@ -557,15 +578,15 @@ local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
 
 -- Auto Farm All Enemies in Selected Worlds toggle
 local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto-Farm alle ausgewählten Gegner",
-    Description = "Durchläuft automatisch alle ausgewählten Gegner in ausgewählten Welten",
+    Name = "Auto Farm All Selected Enemies",
+    Description = "Automatically cycles through all selected enemies in selected worlds",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds = Value
         
         if Value then
             -- Start auto farm all enemies
-            Utilities.Notify("Auto-Farm", "Automatisches Farmen aller ausgewählten Gegner gestartet", "auto_mode")
+            Utilities.Notify("Auto Farm", "Started auto farming all selected enemies", "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarmAllEnemies then
@@ -579,21 +600,44 @@ local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
                 while AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds do
                     if #AutoFarmConfig.SelectedEnemies > 0 then
                         local enemyCode = AutoFarmConfig.SelectedEnemies[currentEnemyIndex]
-                        Utilities.SummonEnemy(enemyCode)
                         
-                        -- Increment enemy index
-                        currentEnemyIndex = currentEnemyIndex + 1
-                        if currentEnemyIndex > #AutoFarmConfig.SelectedEnemies then
-                            currentEnemyIndex = 1
+                        -- Try to start battle with current enemy
+                        local battleStarted = Utilities.StartNextBattle(enemyCode)
+                        
+                        -- If battle started, we need to wait for it to end
+                        if battleStarted then
+                            -- Wait until battle is over and properly dismissed
+                            while Utilities.IsInBattle() or Utilities.IsBattleEnded() do
+                                wait(1)
+                                
+                                -- Automatically dismiss battle end screen if visible
+                                if Utilities.IsBattleEnded() then
+                                    Utilities.DismissBattleEnd()
+                                end
+                            end
+                            
+                            -- Battle completed, move to next enemy and wait for cooldown
+                            Utilities.Notify("Auto Farm", "Battle completed, moving to next enemy after cooldown", "timer")
+                            
+                            -- Increment enemy index
+                            currentEnemyIndex = currentEnemyIndex + 1
+                            if currentEnemyIndex > #AutoFarmConfig.SelectedEnemies then
+                                currentEnemyIndex = 1
+                            end
+                            
+                            wait(AutoFarmConfig.Interval) -- Wait for cooldown
+                        else
+                            -- Failed to start battle or still in a battle/battle-end state, wait a bit and try again
+                            wait(5)
                         end
+                    else
+                        wait(5)
                     end
-                    
-                    wait(AutoFarmConfig.Interval) -- Wait for cooldown
                 end
             end)
         else
             -- Stop auto farm all enemies
-            Utilities.Notify("Auto-Farm", "Automatisches Farmen aller ausgewählten Gegner beendet", "stop_circle")
+            Utilities.Notify("Auto Farm", "Stopped auto farming all selected enemies", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarmAllEnemies then
@@ -606,15 +650,15 @@ local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
 
 -- Auto Farm Toggle
 local autofarm_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto-Farm ausgewählten Gegner",
-    Description = "Beschwört automatisch den aktuell ausgewählten Gegner nach Ablauf der Abklingzeit",
+    Name = "Auto Farm Selected Enemy",
+    Description = "Automatically spawns the currently selected enemy after cooldown",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.Enabled = Value
         
         if Value then
             -- Start auto farm
-            Utilities.Notify("Auto-Farm", "Automatisches Farmen von " .. AutoFarmConfig.CurrentEnemy .. " in " .. table.concat(AutoFarmConfig.SelectedWorlds, ", ") .. " gestartet", "auto_mode")
+            Utilities.Notify("Auto Farm", "Started auto farming " .. AutoFarmConfig.CurrentEnemy .. " in " .. table.concat(AutoFarmConfig.SelectedWorlds, ", "), "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarm then
@@ -624,13 +668,33 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
             -- Create new auto farm loop
             AutoFarmConfig.Connections.AutoFarm = spawn(function()
                 while AutoFarmConfig.Enabled do
-                    Utilities.SummonEnemy(AutoFarmConfig.CurrentEnemy)
-                    wait(AutoFarmConfig.Interval) -- Wait for cooldown
+                    -- Try to start a battle with current enemy
+                    local battleStarted = Utilities.StartNextBattle(AutoFarmConfig.CurrentEnemy)
+                    
+                    -- If battle started, we need to wait for it to end
+                    if battleStarted then
+                        -- Wait until battle is over and properly dismissed
+                        while Utilities.IsInBattle() or Utilities.IsBattleEnded() do
+                            wait(1)
+                            
+                            -- Automatically dismiss battle end screen if visible
+                            if Utilities.IsBattleEnded() then
+                                Utilities.DismissBattleEnd()
+                            end
+                        end
+                        
+                        -- Battle completed, now wait for cooldown
+                        Utilities.Notify("Auto Farm", "Battle completed, waiting for cooldown", "timer")
+                        wait(AutoFarmConfig.Interval) -- Wait for cooldown
+                    else
+                        -- Failed to start battle or still in a battle/battle-end state, wait a bit and try again
+                        wait(5)
+                    end
                 end
             end)
         else
             -- Stop auto farm
-            Utilities.Notify("Auto-Farm", "Automatisches Farmen beendet", "stop_circle")
+            Utilities.Notify("Auto Farm", "Stopped auto farming", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarm then
@@ -643,15 +707,15 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
 
 -- Auto collect toggle
 local autocollect_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto-Sammeln von Items",
-    Description = "Sammelt automatisch fallen gelassene Items",
+    Name = "Auto Collect Items",
+    Description = "Automatically collects dropped items",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.AutoCollect = Value
         
         if Value then
             -- Start auto collect
-            Utilities.Notify("Auto-Sammeln", "Automatisches Sammeln von Items gestartet", "inventory_2")
+            Utilities.Notify("Auto Collect", "Started auto collecting items", "inventory_2")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoCollect then
@@ -699,7 +763,7 @@ local autocollect_toggle = TabAutoFarm:CreateToggle({
             end)
         else
             -- Stop auto collect
-            Utilities.Notify("Auto-Sammeln", "Automatisches Sammeln von Items beendet", "stop_circle")
+            Utilities.Notify("Auto Collect", "Stopped auto collecting items", "stop_circle")
             
             -- Disconnect auto collect loop
             if AutoFarmConfig.Connections.AutoCollect then
@@ -712,15 +776,15 @@ local autocollect_toggle = TabAutoFarm:CreateToggle({
 
 -- Auto merge toggle
 local automerge_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto-Fusion von Einheiten",
-    Description = "Führt automatisch Fusionen deiner Einheiten durch",
+    Name = "Auto Merge Units",
+    Description = "Automatically merges your units",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.AutoMerge = Value
         
         if Value then
             -- Start auto merge
-            Utilities.Notify("Auto-Fusion", "Automatisches Führen von Einheiten gestartet", "merge")
+            Utilities.Notify("Auto Merge", "Started auto merging units", "merge")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoMerge then
@@ -747,7 +811,7 @@ local automerge_toggle = TabAutoFarm:CreateToggle({
             end)
         else
             -- Stop auto merge
-            Utilities.Notify("Auto-Fusion", "Automatisches Führen von Einheiten beendet", "stop_circle")
+            Utilities.Notify("Auto Merge", "Stopped auto merging units", "stop_circle")
             
             -- Disconnect auto merge loop
             if AutoFarmConfig.Connections.AutoMerge then
@@ -760,13 +824,13 @@ local automerge_toggle = TabAutoFarm:CreateToggle({
 
 -- Cooldown slider
 local cooldown_slider = TabAutoFarm:CreateSlider({
-    Name = "Farm-Abklingzeit (Minuten)",
+    Name = "Farm Cooldown (Minutes)",
     Range = {1, 30},
     Increment = 1,
     CurrentValue = 10,
     Callback = function(Value)
         AutoFarmConfig.Interval = Value * 60 -- Convert to seconds
-        Utilities.Notify("Abklingzeit aktualisiert", "Farm-Abklingzeit auf " .. Value .. " Minuten gesetzt", "timer")
+        Utilities.Notify("Cooldown Updated", "Farm cooldown set to " .. Value .. " minutes", "timer")
     end
 }, "FarmCooldownSlider")
 
@@ -900,9 +964,59 @@ TabRaids:CreateParagraph({
     Text = "Raids offer exclusive rewards and powerful units. You can start a raid against the Eternal Dragon or other powerful bosses."
 })
 
+-- Auto Raid Configuration
+local RaidConfig = {
+    AutoSummonEternalDragon = false,
+    Connections = {}
+}
+
+-- Auto Summon Eternal Dragon toggle
+local auto_summon_dragon_toggle = TabRaids:CreateToggle({
+    Name = "Auto Summon Eternal Dragon",
+    Description = "Automatically summons the Eternal Dragon at regular intervals",
+    CurrentValue = false,
+    Callback = function(Value)
+        RaidConfig.AutoSummonEternalDragon = Value
+        
+        if Value then
+            -- Start auto summon
+            Utilities.Notify("Auto Raid", "Started auto summoning Eternal Dragon", "security")
+            
+            -- Clear previous connections if any
+            if RaidConfig.Connections.AutoSummonDragon then
+                RaidConfig.Connections.AutoSummonDragon:Disconnect()
+            end
+            
+            -- Create new auto summon loop
+            RaidConfig.Connections.AutoSummonDragon = spawn(function()
+                while RaidConfig.AutoSummonEternalDragon do
+                    pcall(function()
+                        local args = {
+                            [1] = "eternal_dragon"
+                        }
+                        
+                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+                    end)
+                    
+                    wait(AutoFarmConfig.Interval) -- Use the same cooldown as auto farm
+                end
+            end)
+        else
+            -- Stop auto summon
+            Utilities.Notify("Auto Raid", "Stopped auto summoning Eternal Dragon", "stop_circle")
+            
+            -- Disconnect auto summon loop
+            if RaidConfig.Connections.AutoSummonDragon then
+                RaidConfig.Connections.AutoSummonDragon:Disconnect()
+                RaidConfig.Connections.AutoSummonDragon = nil
+            end
+        end
+    end
+}, "AutoSummonDragonToggle")
+
 TabRaids:CreateButton({
-    Name = "Summon Eternal Dragon",
-    Description = "Start a raid against the Eternal Dragon",
+    Name = "Summon Eternal Dragon Once",
+    Description = "Start a raid against the Eternal Dragon immediately",
     Callback = function()
         local success, result = pcall(function()
             local args = {
@@ -919,8 +1033,6 @@ TabRaids:CreateButton({
         end
     end
 })
-
-TabRaids:CreateDivider()
 
 -- Exploration Tab
 TabExploration:CreateSection("Exploration Management")
@@ -1163,52 +1275,329 @@ TabShop:CreateButton({
 -- Misc Tab
 TabMisc:CreateSection("Miscellaneous Features")
 
+-- Enemy Cooldown Display
+TabMisc:CreateSection("Enemy Cooldown Information")
+
+local enemy_cooldown_info = TabMisc:CreateParagraph({
+    Title = "Enemy Cooldown",
+    Text = "All enemies have a 10-minute cooldown after defeating them, including bosses."
+})
+
 -- Stats upgrade section
 TabMisc:CreateSection("Stats Upgrade")
 
+-- Auto Stats Configuration
+local AutoStatsConfig = {
+    AutoUpgradeLuck = false,
+    AutoUpgradeCooldownReduction = false,
+    AutoUpgradePotionDuration = false,
+    AutoUpgradeBorderChance = false,
+    AutoUpgradeBossChance = false,
+    Connections = {}
+}
+
+-- Auto Upgrade Luck toggle
+local auto_upgrade_luck_toggle = TabMisc:CreateToggle({
+    Name = "Auto Upgrade Luck",
+    Description = "Automatically upgrades your luck stat when points are available",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoStatsConfig.AutoUpgradeLuck = Value
+        
+        if Value then
+            -- Start auto upgrade
+            Utilities.Notify("Auto Stats", "Started auto upgrading Luck stat", "trending_up")
+            
+            -- Clear previous connections if any
+            if AutoStatsConfig.Connections.AutoUpgradeLuck then
+                AutoStatsConfig.Connections.AutoUpgradeLuck:Disconnect()
+            end
+            
+            -- Create new auto upgrade loop
+            AutoStatsConfig.Connections.AutoUpgradeLuck = spawn(function()
+                while AutoStatsConfig.AutoUpgradeLuck do
+                    Utilities.UpgradeStat("LUCK")
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
+        else
+            -- Stop auto upgrade
+            Utilities.Notify("Auto Stats", "Stopped auto upgrading Luck stat", "stop_circle")
+            
+            -- Disconnect auto upgrade loop
+            if AutoStatsConfig.Connections.AutoUpgradeLuck then
+                AutoStatsConfig.Connections.AutoUpgradeLuck:Disconnect()
+                AutoStatsConfig.Connections.AutoUpgradeLuck = nil
+            end
+        end
+    end
+}, "AutoUpgradeLuckToggle")
+
+-- Auto Upgrade Cooldown Reduction toggle
+local auto_upgrade_cooldown_toggle = TabMisc:CreateToggle({
+    Name = "Auto Upgrade Cooldown Reduction",
+    Description = "Automatically upgrades your cooldown reduction stat when points are available",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoStatsConfig.AutoUpgradeCooldownReduction = Value
+        
+        if Value then
+            -- Start auto upgrade
+            Utilities.Notify("Auto Stats", "Started auto upgrading Cooldown Reduction stat", "trending_up")
+            
+            -- Clear previous connections if any
+            if AutoStatsConfig.Connections.AutoUpgradeCooldownReduction then
+                AutoStatsConfig.Connections.AutoUpgradeCooldownReduction:Disconnect()
+            end
+            
+            -- Create new auto upgrade loop
+            AutoStatsConfig.Connections.AutoUpgradeCooldownReduction = spawn(function()
+                while AutoStatsConfig.AutoUpgradeCooldownReduction do
+                    Utilities.UpgradeStat("COOLDOWN_REDUCTION")
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
+        else
+            -- Stop auto upgrade
+            Utilities.Notify("Auto Stats", "Stopped auto upgrading Cooldown Reduction stat", "stop_circle")
+            
+            -- Disconnect auto upgrade loop
+            if AutoStatsConfig.Connections.AutoUpgradeCooldownReduction then
+                AutoStatsConfig.Connections.AutoUpgradeCooldownReduction:Disconnect()
+                AutoStatsConfig.Connections.AutoUpgradeCooldownReduction = nil
+            end
+        end
+    end
+}, "AutoUpgradeCooldownToggle")
+
+-- Auto Upgrade Potion Duration toggle
+local auto_upgrade_potion_toggle = TabMisc:CreateToggle({
+    Name = "Auto Upgrade Potion Duration",
+    Description = "Automatically upgrades your potion duration stat when points are available",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoStatsConfig.AutoUpgradePotionDuration = Value
+        
+        if Value then
+            -- Start auto upgrade
+            Utilities.Notify("Auto Stats", "Started auto upgrading Potion Duration stat", "trending_up")
+            
+            -- Clear previous connections if any
+            if AutoStatsConfig.Connections.AutoUpgradePotionDuration then
+                AutoStatsConfig.Connections.AutoUpgradePotionDuration:Disconnect()
+            end
+            
+            -- Create new auto upgrade loop
+            AutoStatsConfig.Connections.AutoUpgradePotionDuration = spawn(function()
+                while AutoStatsConfig.AutoUpgradePotionDuration do
+                    Utilities.UpgradeStat("POTION_DURATION")
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
+        else
+            -- Stop auto upgrade
+            Utilities.Notify("Auto Stats", "Stopped auto upgrading Potion Duration stat", "stop_circle")
+            
+            -- Disconnect auto upgrade loop
+            if AutoStatsConfig.Connections.AutoUpgradePotionDuration then
+                AutoStatsConfig.Connections.AutoUpgradePotionDuration:Disconnect()
+                AutoStatsConfig.Connections.AutoUpgradePotionDuration = nil
+            end
+        end
+    end
+}, "AutoUpgradePotionToggle")
+
+-- Auto Upgrade Border Chance toggle
+local auto_upgrade_border_toggle = TabMisc:CreateToggle({
+    Name = "Auto Upgrade Border Chance",
+    Description = "Automatically upgrades your border chance stat when points are available",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoStatsConfig.AutoUpgradeBorderChance = Value
+        
+        if Value then
+            -- Start auto upgrade
+            Utilities.Notify("Auto Stats", "Started auto upgrading Border Chance stat", "trending_up")
+            
+            -- Clear previous connections if any
+            if AutoStatsConfig.Connections.AutoUpgradeBorderChance then
+                AutoStatsConfig.Connections.AutoUpgradeBorderChance:Disconnect()
+            end
+            
+            -- Create new auto upgrade loop
+            AutoStatsConfig.Connections.AutoUpgradeBorderChance = spawn(function()
+                while AutoStatsConfig.AutoUpgradeBorderChance do
+                    Utilities.UpgradeStat("BORDER_CHANCE")
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
+        else
+            -- Stop auto upgrade
+            Utilities.Notify("Auto Stats", "Stopped auto upgrading Border Chance stat", "stop_circle")
+            
+            -- Disconnect auto upgrade loop
+            if AutoStatsConfig.Connections.AutoUpgradeBorderChance then
+                AutoStatsConfig.Connections.AutoUpgradeBorderChance:Disconnect()
+                AutoStatsConfig.Connections.AutoUpgradeBorderChance = nil
+            end
+        end
+    end
+}, "AutoUpgradeBorderToggle")
+
+-- Auto Upgrade Boss Chance toggle
+local auto_upgrade_boss_toggle = TabMisc:CreateToggle({
+    Name = "Auto Upgrade Boss Chance",
+    Description = "Automatically upgrades your boss chance stat when points are available",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoStatsConfig.AutoUpgradeBossChance = Value
+        
+        if Value then
+            -- Start auto upgrade
+            Utilities.Notify("Auto Stats", "Started auto upgrading Boss Chance stat", "trending_up")
+            
+            -- Clear previous connections if any
+            if AutoStatsConfig.Connections.AutoUpgradeBossChance then
+                AutoStatsConfig.Connections.AutoUpgradeBossChance:Disconnect()
+            end
+            
+            -- Create new auto upgrade loop
+            AutoStatsConfig.Connections.AutoUpgradeBossChance = spawn(function()
+                while AutoStatsConfig.AutoUpgradeBossChance do
+                    Utilities.UpgradeStat("BOSS_CHANCE")
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
+        else
+            -- Stop auto upgrade
+            Utilities.Notify("Auto Stats", "Stopped auto upgrading Boss Chance stat", "stop_circle")
+            
+            -- Disconnect auto upgrade loop
+            if AutoStatsConfig.Connections.AutoUpgradeBossChance then
+                AutoStatsConfig.Connections.AutoUpgradeBossChance:Disconnect()
+                AutoStatsConfig.Connections.AutoUpgradeBossChance = nil
+            end
+        end
+    end
+}, "AutoUpgradeBossToggle")
+
+-- Manual upgrade buttons
 TabMisc:CreateButton({
-    Name = "Upgrade Luck",
-    Description = "Upgrade your luck stat",
+    Name = "Upgrade Luck (Once)",
+    Description = "Upgrade your luck stat once",
     Callback = function()
         Utilities.UpgradeStat("LUCK")
     end
 })
 
 TabMisc:CreateButton({
-    Name = "Upgrade Cooldown Reduction",
-    Description = "Upgrade your cooldown reduction stat",
+    Name = "Upgrade Cooldown Reduction (Once)",
+    Description = "Upgrade your cooldown reduction stat once",
     Callback = function()
         Utilities.UpgradeStat("COOLDOWN_REDUCTION")
     end
 })
 
 TabMisc:CreateButton({
-    Name = "Upgrade Potion Duration",
-    Description = "Upgrade your potion duration stat",
+    Name = "Upgrade Potion Duration (Once)",
+    Description = "Upgrade your potion duration stat once",
     Callback = function()
         Utilities.UpgradeStat("POTION_DURATION")
     end
 })
 
 TabMisc:CreateButton({
-    Name = "Upgrade Border Chance",
-    Description = "Upgrade your border chance stat",
+    Name = "Upgrade Border Chance (Once)",
+    Description = "Upgrade your border chance stat once",
     Callback = function()
         Utilities.UpgradeStat("BORDER_CHANCE")
     end
 })
 
 TabMisc:CreateButton({
-    Name = "Upgrade Boss Chance",
-    Description = "Upgrade your boss chance stat",
+    Name = "Upgrade Boss Chance (Once)",
+    Description = "Upgrade your boss chance stat once",
     Callback = function()
         Utilities.UpgradeStat("BOSS_CHANCE")
     end
 })
 
--- Theme und Config Sektionen hinzufügen
+-- Theme and Config sections
 TabSettings:BuildThemeSection()
 TabSettings:BuildConfigSection()
 
--- Autoload Config aktivieren
+-- Enable autoload config
 Luna:LoadAutoloadConfig()
+
+-- Function to check if player is in battle
+Utilities.IsInBattle = function()
+    local localPlayer = Utilities.GetLocalPlayer()
+    if localPlayer and localPlayer.PlayerGui and localPlayer.PlayerGui:FindFirstChild("battle") then
+        return true
+    end
+    return false
+end
+
+-- Function to check if battle just ended
+Utilities.IsBattleEnded = function()
+    local localPlayer = Utilities.GetLocalPlayer()
+    if localPlayer and localPlayer.PlayerGui and localPlayer.PlayerGui:FindFirstChild("battle-end") then
+        return true
+    end
+    return false
+end
+
+-- Function to simulate mouse clicks (M1)
+Utilities.ClickM1 = function(times)
+    times = times or 10 -- Default to 10 clicks
+    
+    pcall(function()
+        for i = 1, times do
+            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, true, game, 1)
+            wait(0.1)
+            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, false, game, 1)
+            wait(0.1)
+        end
+    end)
+end
+
+-- Function to dismiss battle end screen
+Utilities.DismissBattleEnd = function()
+    if Utilities.IsBattleEnded() then
+        -- Wait 3 seconds as specified
+        wait(3)
+        
+        -- Click M1 repeatedly until battle-end GUI is gone
+        local maxAttempts = 30 -- Maximum attempts to prevent infinite loop
+        local attempts = 0
+        
+        while Utilities.IsBattleEnded() and attempts < maxAttempts do
+            Utilities.ClickM1(5) -- Try 5 clicks each iteration
+            wait(0.5)
+            attempts = attempts + 1
+        end
+        
+        -- Wait a bit more to ensure everything is properly dismissed
+        wait(1)
+    end
+end
+
+-- Function to handle battle flow and start next battle
+Utilities.StartNextBattle = function(enemyName)
+    -- First check if we're in a battle
+    if Utilities.IsInBattle() then
+        return false -- Already in battle, can't start a new one
+    end
+    
+    -- Check if we need to dismiss a battle end screen
+    if Utilities.IsBattleEnded() then
+        Utilities.DismissBattleEnd()
+    end
+    
+    -- Now try to summon the enemy
+    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+        return Utilities.SummonEnemy(enemyName)
+    end
+    
+    return false
+end
