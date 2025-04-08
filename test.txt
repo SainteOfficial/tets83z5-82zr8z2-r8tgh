@@ -20,8 +20,8 @@ local Window = Luna:CreateWindow({
 -- ###################### DASHBOARD TAB ######################
 local DashboardTab = Window:CreateTab({
     Name = "📊 Dashboard",
-    Icon = "layout-dashboard", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Muss "Lucide" sein
+    Icon = "home", -- Material Icon ohne Leerzeichen
+    ImageSource = "Material", -- WICHTIG: "Material" statt "Lucide"
     ShowTitle = true
 })
 
@@ -51,425 +51,59 @@ DashboardTab:CreateParagraph({
 -- ###################### AUTOFARM TAB ######################
 local AutoFarmTab = Window:CreateTab({
     Name = "⚔️ AutoFarm",
-    Icon = "zap", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Muss "Lucide" sein
+    Icon = "bolt", -- Material Icon ohne Leerzeichen
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- Target Type Section
-AutoFarmTab:CreateSection("Target Type")
-
--- Target Type Toggles
-local allEnemiesToggle = AutoFarmTab:CreateToggle({
-    Name = "🔘 All Enemies",
-    Description = "Targets all nearby enemies",
-    CurrentValue = true,
-    Callback = function(Value)
-        if Value then
-            -- If this toggle is activated, deactivate the boss-only toggle
-            if bossOnlyToggle and bossOnlyToggle.CurrentValue then
-                bossOnlyToggle:Set({CurrentValue = false})
-            end
-            -- Update AutoFarm status in Dashboard
-            autoFarmStatusLabel:Set({Text = "AutoFarm Status: All Enemies"})
-        elseif not (bossOnlyToggle and bossOnlyToggle.CurrentValue) then
-            -- If both toggles are deactivated, set status to Disabled
-            autoFarmStatusLabel:Set({Text = "AutoFarm Status: Disabled"})
-        end
-    end
-}, "AllEnemiesToggle")
-
-local bossOnlyToggle = AutoFarmTab:CreateToggle({
-    Name = "🔘 Bosses Only",
-    Description = "Targets bosses only",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value then
-            -- If this toggle is activated, deactivate the All-Enemies toggle
-            if allEnemiesToggle and allEnemiesToggle.CurrentValue then
-                allEnemiesToggle:Set({CurrentValue = false})
-            end
-            -- Update AutoFarm status in Dashboard
-            autoFarmStatusLabel:Set({Text = "AutoFarm Status: Bosses Only"})
-        elseif not (allEnemiesToggle and allEnemiesToggle.CurrentValue) then
-            -- If both toggles are deactivated, set status to Disabled
-            autoFarmStatusLabel:Set({Text = "AutoFarm Status: Disabled"})
-        end
-    end
-}, "BossOnlyToggle")
-
--- Map Selection Section
-AutoFarmTab:CreateSection("Map Selection")
-
--- Map Selection Toggles
-local allMapsToggle = AutoFarmTab:CreateToggle({
-    Name = "🔘 All Maps",
-    Description = "Farm on all available maps",
-    CurrentValue = true,
-    Callback = function(Value)
-        if Value then
-            -- If this toggle is activated, deactivate the Specific Maps dropdown
-            specificMapsDropdown:Set({Interaction = not Value})
-        end
-    end
-}, "AllMapsToggle")
-
--- Example maps for dropdown
-local mapOptions = {"Map 1", "Map 2", "Map 3", "Map 4", "Map 5"}
-
-local specificMapsDropdown = AutoFarmTab:CreateDropdown({
-    Name = "🔘 Specific Maps",
-    Description = "Select specific maps for farming",
-    Options = mapOptions,
-    CurrentOption = {"Map 1"},
-    MultipleOptions = true,
-    SpecialType = nil,
-    Interaction = false, -- Disabled when "All Maps" is enabled
-    Callback = function(Options)
-        -- Implement map selection logic here
-    end
-}, "SpecificMapsDropdown")
-
--- Start/Stop Button for Farming
-local farmingActive = false
-local farmingButton = AutoFarmTab:CreateButton({
-    Name = "Start Farming",
-    Description = "Start or stop the AutoFarm process",
-    Callback = function()
-        farmingActive = not farmingActive
-        
-        if farmingActive then
-            farmingButton:Set({Name = "Stop Farming"})
-            -- Implement farming logic here
-            -- Update status in Dashboard
-            if allEnemiesToggle.CurrentValue then
-                autoFarmStatusLabel:Set({Text = "AutoFarm Status: All Enemies (Active)"})
-            elseif bossOnlyToggle.CurrentValue then
-                autoFarmStatusLabel:Set({Text = "AutoFarm Status: Bosses Only (Active)"})
-            end
-        else
-            farmingButton:Set({Name = "Start Farming"})
-            -- Stop farming here
-            -- Update status in Dashboard
-            if allEnemiesToggle.CurrentValue then
-                autoFarmStatusLabel:Set({Text = "AutoFarm Status: All Enemies"})
-            elseif bossOnlyToggle.CurrentValue then
-                autoFarmStatusLabel:Set({Text = "AutoFarm Status: Bosses Only"})
-            end
-        end
-    end
-})
-
--- Current Enemy Label
-local currentEnemyLabel = AutoFarmTab:CreateLabel({
-    Text = "Current Enemy: None",
-    Style = 1
-})
-
--- Kill Log
-AutoFarmTab:CreateSection("Kill Log")
-
-local killLogParagraph = AutoFarmTab:CreateParagraph({
-    Title = "Killed Enemies", 
-    Text = "No enemies killed yet."
-})
-
--- ###################### TOWERS TAB ######################
+-- Weitere Tabs mit Material-Icons
 local TowersTab = Window:CreateTab({
     Name = "🗼 Towers",
-    Icon = "building", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Muss "Lucide" sein
+    Icon = "domain", -- Material Icon ohne Leerzeichen
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- Battle Tower Section
-TowersTab:CreateSection("Battle Tower")
-
--- Battle Tower Mode
-local highestStageToggle = TowersTab:CreateToggle({
-    Name = "🔘 Highest Stage Automatically",
-    Description = "Automatically selects the highest available stage",
-    CurrentValue = true,
-    Callback = function(Value)
-        if Value then
-            -- Deactivate the slider for specific stage
-            specificStageSlider:Set({Interaction = not Value})
-        else
-            -- Activate the slider
-            specificStageSlider:Set({Interaction = true})
-        end
-    end
-}, "HighestStageToggle")
-
--- Slider for specific stage
-local specificStageSlider = TowersTab:CreateSlider({
-    Name = "🔘 Specific Stage",
-    Range = {1, 50}, -- Assuming Battle Tower has 50 stages
-    Increment = 1,
-    CurrentValue = 1,
-    Interaction = false, -- Default deactivated when Highest Stage is enabled
-    Callback = function(Value)
-        -- Implement stage selection logic here
-    end
-}, "SpecificStageSlider")
-
--- Start Tower Button
-local battleTowerActive = false
-local startTowerButton = TowersTab:CreateButton({
-    Name = "Start Battle Tower",
-    Description = "Start the Battle Tower",
-    Callback = function()
-        battleTowerActive = not battleTowerActive
-        
-        if battleTowerActive then
-            startTowerButton:Set({Name = "Stop Battle Tower"})
-            -- Start Battle Tower
-            -- Update status in Dashboard
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Battle Tower (Active)"})
-        else
-            startTowerButton:Set({Name = "Start Battle Tower"})
-            -- Stop Battle Tower
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Disabled"})
-        end
-    end
-})
-
--- Infinite Tower Section
-TowersTab:CreateSection("Infinite Tower")
-
--- Infinite Tower Buttons
-local infiniteTowerActive = false
-local infiniteTowerPaused = false
-
--- Start Button
-local startInfiniteTowerButton = TowersTab:CreateButton({
-    Name = "▶️ Start",
-    Description = "Start the Infinite Tower",
-    Callback = function()
-        if not infiniteTowerActive then
-            infiniteTowerActive = true
-            infiniteTowerPaused = false
-            -- Start Infinite Tower
-            -- Update status in Dashboard
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Infinite Tower (Active)"})
-        end
-    end
-})
-
--- Pause Button
-local pauseInfiniteTowerButton = TowersTab:CreateButton({
-    Name = "⏸️ Pause",
-    Description = "Pause the Infinite Tower",
-    Callback = function()
-        if infiniteTowerActive and not infiniteTowerPaused then
-            infiniteTowerPaused = true
-            -- Pause Infinite Tower
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Infinite Tower (Paused)"})
-        end
-    end
-})
-
--- Stop Button
-local stopInfiniteTowerButton = TowersTab:CreateButton({
-    Name = "⏹️ Stop",
-    Description = "Stop the Infinite Tower",
-    Callback = function()
-        if infiniteTowerActive then
-            infiniteTowerActive = false
-            infiniteTowerPaused = false
-            -- Stop Infinite Tower
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Disabled"})
-        end
-    end
-})
-
--- Realtime Display
-local currentFloorLabel = TowersTab:CreateLabel({
-    Text = "Current Floor: 0",
-    Style = 1
-})
-
-local runtimeLabel = TowersTab:CreateLabel({
-    Text = "Runtime: 00:00:00",
-    Style = 1
-})
-
--- AutoStart Option
-local autoStartToggle = TowersTab:CreateToggle({
-    Name = "AutoStart on Death/Completion",
-    Description = "Automatically restart the tower",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Implement AutoStart logic here
-    end
-}, "AutoStartToggle")
-
--- ###################### RAIDS TAB ######################
 local RaidsTab = Window:CreateTab({
     Name = "🚧 Raids",
-    Icon = "users", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Muss "Lucide" sein
+    Icon = "groups", -- Material Icon ohne Leerzeichen
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- Coming Soon Display
-RaidsTab:CreateParagraph({
-    Title = "Coming Soon...", 
-    Text = "Raid functions will be added in a future update."
-})
-
--- ###################### EXPLORATION TAB ######################
 local ExplorationTab = Window:CreateTab({
     Name = "🌍 Exploration",
-    Icon = "globe", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Muss "Lucide" sein
+    Icon = "explore", -- Material Icon ohne Leerzeichen
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- Coming Soon Display with preview functions
-ExplorationTab:CreateParagraph({
-    Title = "Coming Soon...", 
-    Text = "Full exploration features will be added in a future update."
-})
-
--- Preview functions
-local autoPickupToggle = ExplorationTab:CreateToggle({
-    Name = "AutoPickup Items",
-    Description = "Automatically collects items nearby",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Implement AutoPickup logic here
-    end
-}, "AutoPickupToggle")
-
-local tweenToItemToggle = ExplorationTab:CreateToggle({
-    Name = "Tween to nearest item",
-    Description = "Moves the character to the nearest item",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Implement Tween logic here
-    end
-}, "TweenToItemToggle")
-
--- ###################### SHOP TAB ######################
 local ShopTab = Window:CreateTab({
     Name = "🛒 Shop",
-    Icon = "shopping-cart", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Muss "Lucide" sein
+    Icon = "shopping_cart", -- Material Icon ohne Leerzeichen
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- Coming Soon Display
-ShopTab:CreateParagraph({
-    Title = "Coming Soon...", 
-    Text = "Shop features will be added in a future update."
-})
-
--- ###################### MISC TAB ######################
 local MiscTab = Window:CreateTab({
     Name = "🛠️ Misc",
-    Icon = "tool", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Muss "Lucide" sein
+    Icon = "build", -- Material Icon ohne Leerzeichen
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- FPS Booster
-local fpsBoosterToggle = MiscTab:CreateToggle({
-    Name = "✅ FPS Booster",
-    Description = "Increases FPS by optimizing graphics",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value then
-            -- Activate FPS Booster
-            setfpscap(9999) -- Maximum FPS
-            local lighting = game:GetService("Lighting")
-            lighting.GlobalShadows = false
-            lighting.FogEnd = 9e9
-            
-            -- Additional optimizations
-            for _, v in pairs(workspace:GetDescendants()) do
-                if v:IsA("Part") or v:IsA("UnionOperation") or v:IsA("MeshPart") then
-                    v.Material = "Plastic"
-                    v.Reflectance = 0
-                end
-            end
-        else
-            -- Deactivate FPS Booster - restore default settings
-            setfpscap(60)
-            local lighting = game:GetService("Lighting")
-            lighting.GlobalShadows = true
-            lighting.FogEnd = 100000
-        end
-    end
-}, "FPSBoosterToggle")
-
--- Webhook Logger
-MiscTab:CreateSection("Webhook Logger")
-
-local webhookUrlInput = MiscTab:CreateInput({
-    Name = "Discord Webhook URL",
-    Description = "Enter the Discord Webhook URL",
-    PlaceholderText = "https://discord.com/api/webhooks/...",
-    CurrentValue = "",
-    Numeric = false,
-    Enter = false,
-    Callback = function(Text)
-        -- Save the Webhook URL
-    end
-}, "WebhookUrlInput")
-
-local webhookLoggerToggle = MiscTab:CreateToggle({
-    Name = "✅ Webhook Logger",
-    Description = "Sends logs to your Discord webhook",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Activate/deactivate Webhook Logger
-    end
-}, "WebhookLoggerToggle")
-
--- Enemy Cooldowns
-MiscTab:CreateSection("Enemy Cooldowns")
-
-local enemyCooldownsToggle = MiscTab:CreateToggle({
-    Name = "✅ Show Enemy Cooldowns",
-    Description = "Shows remaining time for boss respawns",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Activate/deactivate Enemy Cooldowns
-    end
-}, "EnemyCooldownsToggle")
-
--- Enemy Cooldown List
-local enemyCooldownsParagraph = MiscTab:CreateParagraph({
-    Title = "Remaining Cooldowns", 
-    Text = "Enable 'Show Enemy Cooldowns' to see the list."
-})
-
--- ###################### SETTINGS TAB ######################
 local SettingsTab = Window:CreateTab({
     Name = "⚙️ Settings",
-    Icon = "settings", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Muss "Lucide" sein
+    Icon = "settings", -- Material Icon ohne Leerzeichen
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- Add Theme Section
+-- Themen-Sektion hinzufügen
 SettingsTab:BuildThemeSection()
 
--- Add Configuration Section
+-- Konfigurations-Sektion hinzufügen
 SettingsTab:BuildConfigSection()
 
--- UI Toggle Keybind
-local UIBind = SettingsTab:CreateBind({
-    Name = "Toggle UI",
-    Description = "Press this key to show/hide the UI",
-    CurrentBind = "RightControl",
-    HoldToInteract = false,
-    Callback = function() end,
-    OnChangedCallback = function(Bind)
-        Window.Bind = Bind
-    end
-}, "UIToggleKeybind")
-
--- IMPORTANT: Load auto-configuration (must be at the end!)
+-- WICHTIG: Automatische Konfiguration laden (muss am Ende sein!)
 Luna:LoadAutoloadConfig()
