@@ -38,6 +38,34 @@ local Window = Luna:CreateWindow({
 -- Utility Functions
 local Utilities = {}
 
+-- Function to summon an enemy for battle
+Utilities.SummonEnemy = function(enemyName)
+    Utilities.DebugPrint("Attempting to summon enemy: " .. tostring(enemyName))
+    
+    if not enemyName then
+        Utilities.DebugPrint("Cannot summon nil enemy")
+        return false
+    end
+    
+    local success, result = pcall(function()
+        -- Versuche den Gegner zu beschwören
+        local args = {
+            [1] = enemyName
+        }
+        
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+        return true
+    end)
+    
+    if not success then
+        Utilities.DebugPrint("Error summoning enemy: " .. tostring(result))
+        return false
+    end
+    
+    Utilities.DebugPrint("Successfully sent summon request for: " .. enemyName)
+    return true
+end
+
 -- Function to get local player
 Utilities.GetLocalPlayer = function()
     return game:GetService("Players").LocalPlayer
