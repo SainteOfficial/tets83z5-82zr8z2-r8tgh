@@ -18,7 +18,7 @@
 -- Load Luna Interface Library
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
--- Initialize Window with Key System
+-- Initialize Window without Key System
 local Window = Luna:CreateWindow({
     Name = "MythHub",
     Subtitle = "Anime Card Clash",
@@ -32,20 +32,7 @@ local Window = Luna:CreateWindow({
         ConfigFolder = "AnimeCardClash"
     },
     
-    KeySystem = false,
-    KeySettings = {
-        Title = "MythHub Authentication",
-        Subtitle = "Premium Access Verification",
-        Note = "Enter your license key to access MythHub Premium features",
-        SaveInRoot = true,
-        SaveKey = true,
-        Key = {"MYTHHUB-PREMIUM"}, -- Replace with actual key verification system
-        SecondAction = {
-            Enabled = true,
-            Type = "Discord",
-            Parameter = "MythHubDiscord" -- Replace with actual Discord invite
-        }
-    }
+    KeySystem = false
 })
 
 -- Utility Functions
