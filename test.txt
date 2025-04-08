@@ -174,9 +174,95 @@ local AutoFarmConfig = {
     CurrentEnemy = "unstoppable_fist",
     AutoCollect = false,
     AutoMerge = false,
+    AutoFarmAllWorldBosses = false,
+    AutoFarmAllEnemiesInSelectedWorlds = false,
+    SelectedWorlds = {"Ninja Village"},
+    SelectedEnemies = {"unstoppable_fist"},
+    WorldBosses = {
+        "bijuu_beast",           -- Naruto Rage Mode
+        "awakened_galactic_tyrant", -- Frieza
+        "king_of_curses",        -- Sukuna
+        "combat_giant",          -- Eren
+        "awakened_pale_demon_lord", -- Muzan
+        "soul_queen",            -- Big Mom
+        "awakened_shadow_monarch"  -- Sung Jinwoo
+    },
     Interval = 10 * 60, -- 10 minutes cooldown
     Connections = {}
 }
+
+-- Enemy display names mapping
+local EnemyDisplayNames = {
+    -- Ninja Village
+    unstoppable_fist = "Rock Lee",
+    copy_ninja = "Kakashi",
+    awakened_dark_avenger = "Sasuke",
+    awakened_promised_child = "Naruto Sage Mode",
+    six_paths_of_pain = "Pain",
+    bijuu_beast = "Naruto Rage Mode (Boss)",
+    
+    -- Green Village
+    ultimate_warrior = "Son Gohan",
+    body_switcher = "Captain Ginyu",
+    namekian_sage = "Piccolo",
+    awakened_prideful_prince = "Vegeta",
+    awakened_earth_strongest = "Goku",
+    awakened_galactic_tyrant = "Frieza (Boss)",
+    
+    -- Shibuya Station
+    cursed_doll = "Nobara",
+    awakened_shadow_summoner = "Megumi",
+    cursed_fist = "Yuji",
+    rika_blessing = "Yuta",
+    limitless_master = "Gojo",
+    king_of_curses = "Sukuna (Boss)",
+    
+    -- Titans City
+    survey_commander = "Erwin",
+    blade_warrior = "Mikasa",
+    armored_giant = "Reiner",
+    beast_giant = "Zeke",
+    blade_captain = "Levi",
+    combat_giant = "Eren (Boss)",
+    
+    -- Dimensional Fortress
+    thunder_demon = "Kaigaku",
+    childish_demon = "Hantengu",
+    compass_demon = "Akaza",
+    awakened_frost_demon = "Doma",
+    awakened_six_eyed_slayer = "Kokushibo",
+    awakened_pale_demon_lord = "Muzan (Boss)",
+    
+    -- Candy Island
+    genie_commander = "Daifuku",
+    candy_master = "Perospero",
+    biscuit_warrior = "Cracker",
+    juice_queen = "Smoothie",
+    mochi_emperor = "Katakuri",
+    soul_queen = "Big Mom (Boss)",
+    
+    -- Solo City
+    light_saintess = "Cha Hae-In",
+    the_goliath = "Thomas Andre",
+    shadow_bear = "Tank",
+    shadow_commander = "Igris",
+    shadow_ant = "Beru",
+    awakened_shadow_monarch = "Sung Jinwoo (Boss)"
+}
+
+-- Function to generate enemy display options for dropdown
+local function getEnemyDisplayOptions(enemies)
+    local displayOptions = {}
+    for _, enemyCode in ipairs(enemies) do
+        table.insert(displayOptions, EnemyDisplayNames[enemyCode] .. " (" .. enemyCode .. ")")
+    end
+    return displayOptions
+end
+
+-- Function to extract enemy code from display option
+local function getEnemyCodeFromDisplayOption(displayOption)
+    return string.match(displayOption, "%(([^%)]+)%)")
+end
 
 -- Initialize Tabs
 local TabDashboard = Window:CreateTab({
@@ -280,77 +366,255 @@ TabDashboard:CreateParagraph({
 })
 
 -- AutoFarm Tab
-TabAutoFarm:CreateSection("Enemy Farm Configuration")
+TabAutoFarm:CreateSection("Gegner-Farm Konfiguration")
 
 -- World selection
 local world_dropdown = TabAutoFarm:CreateDropdown({
-    Name = "Select World",
-    Description = "Choose the world to farm enemies from",
+    Name = "Welten auswählen",
+    Description = "Wähle die Welten, von denen Gegner gefarmt werden sollen",
     Options = {"Ninja Village", "Green Village", "Shibuya Station", "Titans City", "Dimensional Fortress", "Candy Island", "Solo City"},
     CurrentOption = {"Ninja Village"},
-    MultipleOptions = false,
+    MultipleOptions = true,
     SpecialType = nil,
     Callback = function(Option)
-        AutoFarmConfig.CurrentWorld = Option
-        -- Update enemy dropdown based on selected world
+        AutoFarmConfig.SelectedWorlds = Option
+        -- Update enemy dropdown based on selected worlds
         updateEnemyDropdown(Option)
     end
 }, "WorldSelection")
 
 -- Enemy dropdown (will be updated based on world selection)
 local enemy_dropdown = TabAutoFarm:CreateDropdown({
-    Name = "Select Enemy",
-    Description = "Choose the enemy to farm",
-    Options = {"unstoppable_fist", "copy_ninja", "awakened_dark_avenger", "awakened_promised_child", "six_paths_of_pain", "bijuu_beast"},
-    CurrentOption = {"unstoppable_fist"},
-    MultipleOptions = false,
+    Name = "Gegner auswählen",
+    Description = "Wähle die Gegner, die gefarmt werden sollen",
+    Options = getEnemyDisplayOptions({"unstoppable_fist", "copy_ninja", "awakened_dark_avenger", "awakened_promised_child", "six_paths_of_pain", "bijuu_beast"}),
+    CurrentOption = {EnemyDisplayNames["unstoppable_fist"] .. " (unstoppable_fist)"},
+    MultipleOptions = true,
     SpecialType = nil,
     Callback = function(Option)
-        AutoFarmConfig.CurrentEnemy = Option
+        local selectedEnemies = {}
+        for _, displayOption in ipairs(Option) do
+            local enemyCode = getEnemyCodeFromDisplayOption(displayOption)
+            if enemyCode then
+                table.insert(selectedEnemies, enemyCode)
+            end
+        end
+        AutoFarmConfig.SelectedEnemies = selectedEnemies
+        AutoFarmConfig.CurrentEnemy = selectedEnemies[1] or "unstoppable_fist"
     end
 }, "EnemySelection")
 
 -- Function to update enemy dropdown based on world selection
-function updateEnemyDropdown(world)
-    local enemies = {}
+function updateEnemyDropdown(worlds)
+    local allEnemies = {}
+    local enemyCodes = {}
     
-    if world == "Ninja Village" then
-        enemies = {"unstoppable_fist", "copy_ninja", "awakened_dark_avenger", "awakened_promised_child", "six_paths_of_pain", "bijuu_beast"}
-    elseif world == "Green Village" then
-        enemies = {"ultimate_warrior", "body_switcher", "namekian_sage", "awakened_prideful_prince", "awakened_earth_strongest", "awakened_galactic_tyrant"}
-    elseif world == "Shibuya Station" then
-        enemies = {"cursed_doll", "awakened_shadow_summoner", "cursed_fist", "rika_blessing", "limitless_master", "king_of_curses"}
-    elseif world == "Titans City" then
-        enemies = {"survey_commander", "blade_warrior", "armored_giant", "beast_giant", "blade_captain", "combat_giant"}
-    elseif world == "Dimensional Fortress" then
-        enemies = {"thunder_demon", "childish_demon", "compass_demon", "awakened_frost_demon", "awakened_six_eyed_slayer", "awakened_pale_demon_lord"}
-    elseif world == "Candy Island" then
-        enemies = {"genie_commander", "candy_master", "biscuit_warrior", "juice_queen", "mochi_emperor", "soul_queen"}
-    elseif world == "Solo City" then
-        enemies = {"light_saintess", "the_goliath", "shadow_bear", "shadow_commander", "shadow_ant", "awakened_shadow_monarch"}
+    -- If no worlds selected, default to Ninja Village
+    if #worlds == 0 then
+        worlds = {"Ninja Village"}
     end
     
+    for _, world in ipairs(worlds) do
+        if world == "Ninja Village" then
+            for _, enemy in ipairs({"unstoppable_fist", "copy_ninja", "awakened_dark_avenger", "awakened_promised_child", "six_paths_of_pain", "bijuu_beast"}) do
+                enemyCodes[enemy] = true
+            end
+        elseif world == "Green Village" then
+            for _, enemy in ipairs({"ultimate_warrior", "body_switcher", "namekian_sage", "awakened_prideful_prince", "awakened_earth_strongest", "awakened_galactic_tyrant"}) do
+                enemyCodes[enemy] = true
+            end
+        elseif world == "Shibuya Station" then
+            for _, enemy in ipairs({"cursed_doll", "awakened_shadow_summoner", "cursed_fist", "rika_blessing", "limitless_master", "king_of_curses"}) do
+                enemyCodes[enemy] = true
+            end
+        elseif world == "Titans City" then
+            for _, enemy in ipairs({"survey_commander", "blade_warrior", "armored_giant", "beast_giant", "blade_captain", "combat_giant"}) do
+                enemyCodes[enemy] = true
+            end
+        elseif world == "Dimensional Fortress" then
+            for _, enemy in ipairs({"thunder_demon", "childish_demon", "compass_demon", "awakened_frost_demon", "awakened_six_eyed_slayer", "awakened_pale_demon_lord"}) do
+                enemyCodes[enemy] = true
+            end
+        elseif world == "Candy Island" then
+            for _, enemy in ipairs({"genie_commander", "candy_master", "biscuit_warrior", "juice_queen", "mochi_emperor", "soul_queen"}) do
+                enemyCodes[enemy] = true
+            end
+        elseif world == "Solo City" then
+            for _, enemy in ipairs({"light_saintess", "the_goliath", "shadow_bear", "shadow_commander", "shadow_ant", "awakened_shadow_monarch"}) do
+                enemyCodes[enemy] = true
+            end
+        end
+    end
+    
+    -- Convert to array
+    for enemyCode, _ in pairs(enemyCodes) do
+        table.insert(allEnemies, enemyCode)
+    end
+    
+    -- Get display options
+    local displayOptions = getEnemyDisplayOptions(allEnemies)
+    
+    -- Update dropdown
     enemy_dropdown:Set({
-        Options = enemies,
-        CurrentOption = {enemies[1]}
+        Options = displayOptions,
+        CurrentOption = {displayOptions[1]}
     })
     
-    AutoFarmConfig.CurrentEnemy = enemies[1]
+    -- Update selected enemies
+    AutoFarmConfig.SelectedEnemies = {allEnemies[1] or "unstoppable_fist"}
+    AutoFarmConfig.CurrentEnemy = allEnemies[1] or "unstoppable_fist"
 end
 
 TabAutoFarm:CreateDivider()
+TabAutoFarm:CreateSection("Weltbosse")
+
+-- World Boss section (moved from Raid tab)
+local world_boss_dropdown = TabAutoFarm:CreateDropdown({
+    Name = "Weltboss auswählen",
+    Description = "Wähle einen Weltboss für den Kampf",
+    Options = {
+        "Naruto Rage Mode (bijuu_beast)",
+        "Frieza (awakened_galactic_tyrant)",
+        "Sukuna (king_of_curses)",
+        "Eren (combat_giant)",
+        "Muzan (awakened_pale_demon_lord)",
+        "Big Mom (soul_queen)",
+        "Sung Jinwoo (awakened_shadow_monarch)"
+    },
+    CurrentOption = {"Naruto Rage Mode (bijuu_beast)"},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        -- Nothing needed here, will be used in the button below
+    end
+}, "WorldBossSelection")
+
+TabAutoFarm:CreateButton({
+    Name = "Ausgewählten Boss beschwören",
+    Description = "Starte einen Kampf gegen den ausgewählten Weltboss",
+    Callback = function()
+        local boss = world_boss_dropdown.CurrentOption
+        if type(boss) == "table" then
+            boss = boss[1]
+        end
+        
+        local bossCode = getEnemyCodeFromDisplayOption(boss)
+        if bossCode then
+            Utilities.SummonEnemy(bossCode)
+        end
+    end
+})
+
+TabAutoFarm:CreateDivider()
+TabAutoFarm:CreateSection("Auto-Farm Optionen")
+
+-- Auto Farm All World Bosses toggle
+local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
+    Name = "Auto-Farm alle Weltbosse",
+    Description = "Durchläuft automatisch alle Weltbosse",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoFarmConfig.AutoFarmAllWorldBosses = Value
+        
+        if Value then
+            -- Start auto farm all bosses
+            Utilities.Notify("Auto-Farm", "Automatisches Farmen aller Weltbosse gestartet", "auto_mode")
+            
+            -- Clear previous connections if any
+            if AutoFarmConfig.Connections.AutoFarmAllBosses then
+                AutoFarmConfig.Connections.AutoFarmAllBosses:Disconnect()
+            end
+            
+            -- Create new auto farm loop
+            AutoFarmConfig.Connections.AutoFarmAllBosses = spawn(function()
+                local currentBossIndex = 1
+                
+                while AutoFarmConfig.AutoFarmAllWorldBosses do
+                    local bossCode = AutoFarmConfig.WorldBosses[currentBossIndex]
+                    Utilities.SummonEnemy(bossCode)
+                    
+                    -- Increment boss index
+                    currentBossIndex = currentBossIndex + 1
+                    if currentBossIndex > #AutoFarmConfig.WorldBosses then
+                        currentBossIndex = 1
+                    end
+                    
+                    wait(AutoFarmConfig.Interval) -- Wait for cooldown
+                end
+            end)
+        else
+            -- Stop auto farm all bosses
+            Utilities.Notify("Auto-Farm", "Automatisches Farmen aller Weltbosse beendet", "stop_circle")
+            
+            -- Disconnect auto farm loop
+            if AutoFarmConfig.Connections.AutoFarmAllBosses then
+                AutoFarmConfig.Connections.AutoFarmAllBosses:Disconnect()
+                AutoFarmConfig.Connections.AutoFarmAllBosses = nil
+            end
+        end
+    end
+}, "AutoFarmAllBossesToggle")
+
+-- Auto Farm All Enemies in Selected Worlds toggle
+local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
+    Name = "Auto-Farm alle ausgewählten Gegner",
+    Description = "Durchläuft automatisch alle ausgewählten Gegner in ausgewählten Welten",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds = Value
+        
+        if Value then
+            -- Start auto farm all enemies
+            Utilities.Notify("Auto-Farm", "Automatisches Farmen aller ausgewählten Gegner gestartet", "auto_mode")
+            
+            -- Clear previous connections if any
+            if AutoFarmConfig.Connections.AutoFarmAllEnemies then
+                AutoFarmConfig.Connections.AutoFarmAllEnemies:Disconnect()
+            end
+            
+            -- Create new auto farm loop
+            AutoFarmConfig.Connections.AutoFarmAllEnemies = spawn(function()
+                local currentEnemyIndex = 1
+                
+                while AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds do
+                    if #AutoFarmConfig.SelectedEnemies > 0 then
+                        local enemyCode = AutoFarmConfig.SelectedEnemies[currentEnemyIndex]
+                        Utilities.SummonEnemy(enemyCode)
+                        
+                        -- Increment enemy index
+                        currentEnemyIndex = currentEnemyIndex + 1
+                        if currentEnemyIndex > #AutoFarmConfig.SelectedEnemies then
+                            currentEnemyIndex = 1
+                        end
+                    end
+                    
+                    wait(AutoFarmConfig.Interval) -- Wait for cooldown
+                end
+            end)
+        else
+            -- Stop auto farm all enemies
+            Utilities.Notify("Auto-Farm", "Automatisches Farmen aller ausgewählten Gegner beendet", "stop_circle")
+            
+            -- Disconnect auto farm loop
+            if AutoFarmConfig.Connections.AutoFarmAllEnemies then
+                AutoFarmConfig.Connections.AutoFarmAllEnemies:Disconnect()
+                AutoFarmConfig.Connections.AutoFarmAllEnemies = nil
+            end
+        end
+    end
+}, "AutoFarmAllEnemiesToggle")
 
 -- Auto Farm Toggle
 local autofarm_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto Farm Enemies",
-    Description = "Automatically spawns selected enemies after cooldown",
+    Name = "Auto-Farm ausgewählten Gegner",
+    Description = "Beschwört automatisch den aktuell ausgewählten Gegner nach Ablauf der Abklingzeit",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.Enabled = Value
         
         if Value then
             -- Start auto farm
-            Utilities.Notify("Auto Farm", "Started auto farming " .. AutoFarmConfig.CurrentEnemy .. " in " .. AutoFarmConfig.CurrentWorld, "auto_mode")
+            Utilities.Notify("Auto-Farm", "Automatisches Farmen von " .. AutoFarmConfig.CurrentEnemy .. " in " .. table.concat(AutoFarmConfig.SelectedWorlds, ", ") .. " gestartet", "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarm then
@@ -366,7 +630,7 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
             end)
         else
             -- Stop auto farm
-            Utilities.Notify("Auto Farm", "Stopped auto farming", "stop_circle")
+            Utilities.Notify("Auto-Farm", "Automatisches Farmen beendet", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarm then
@@ -379,15 +643,15 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
 
 -- Auto collect toggle
 local autocollect_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto Collect Items",
-    Description = "Automatically collects dropped items",
+    Name = "Auto-Sammeln von Items",
+    Description = "Sammelt automatisch fallen gelassene Items",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.AutoCollect = Value
         
         if Value then
             -- Start auto collect
-            Utilities.Notify("Auto Collect", "Started auto collecting items", "inventory_2")
+            Utilities.Notify("Auto-Sammeln", "Automatisches Sammeln von Items gestartet", "inventory_2")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoCollect then
@@ -435,7 +699,7 @@ local autocollect_toggle = TabAutoFarm:CreateToggle({
             end)
         else
             -- Stop auto collect
-            Utilities.Notify("Auto Collect", "Stopped auto collecting items", "stop_circle")
+            Utilities.Notify("Auto-Sammeln", "Automatisches Sammeln von Items beendet", "stop_circle")
             
             -- Disconnect auto collect loop
             if AutoFarmConfig.Connections.AutoCollect then
@@ -448,15 +712,15 @@ local autocollect_toggle = TabAutoFarm:CreateToggle({
 
 -- Auto merge toggle
 local automerge_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto Merge Units",
-    Description = "Automatically merges your units",
+    Name = "Auto-Fusion von Einheiten",
+    Description = "Führt automatisch Fusionen deiner Einheiten durch",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.AutoMerge = Value
         
         if Value then
             -- Start auto merge
-            Utilities.Notify("Auto Merge", "Started auto merging units", "merge")
+            Utilities.Notify("Auto-Fusion", "Automatisches Führen von Einheiten gestartet", "merge")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoMerge then
@@ -483,7 +747,7 @@ local automerge_toggle = TabAutoFarm:CreateToggle({
             end)
         else
             -- Stop auto merge
-            Utilities.Notify("Auto Merge", "Stopped auto merging units", "stop_circle")
+            Utilities.Notify("Auto-Fusion", "Automatisches Führen von Einheiten beendet", "stop_circle")
             
             -- Disconnect auto merge loop
             if AutoFarmConfig.Connections.AutoMerge then
@@ -496,13 +760,13 @@ local automerge_toggle = TabAutoFarm:CreateToggle({
 
 -- Cooldown slider
 local cooldown_slider = TabAutoFarm:CreateSlider({
-    Name = "Farm Cooldown (Minutes)",
+    Name = "Farm-Abklingzeit (Minuten)",
     Range = {1, 30},
     Increment = 1,
     CurrentValue = 10,
     Callback = function(Value)
         AutoFarmConfig.Interval = Value * 60 -- Convert to seconds
-        Utilities.Notify("Cooldown Updated", "Farm cooldown set to " .. Value .. " minutes", "timer")
+        Utilities.Notify("Abklingzeit aktualisiert", "Farm-Abklingzeit auf " .. Value .. " Minuten gesetzt", "timer")
     end
 }, "FarmCooldownSlider")
 
@@ -657,34 +921,6 @@ TabRaids:CreateButton({
 })
 
 TabRaids:CreateDivider()
-
-TabRaids:CreateSection("World Bosses")
-
--- World Boss dropdown
-local world_boss_dropdown = TabRaids:CreateDropdown({
-    Name = "Select World Boss",
-    Description = "Choose a world boss to battle",
-    Options = {"bijuu_beast", "awakened_galactic_tyrant", "king_of_curses", "combat_giant", "awakened_pale_demon_lord", "soul_queen", "awakened_shadow_monarch"},
-    CurrentOption = {"bijuu_beast"},
-    MultipleOptions = false,
-    SpecialType = nil,
-    Callback = function(Option)
-        -- Nothing needed here, will be used in the button below
-    end
-}, "WorldBossSelection")
-
-TabRaids:CreateButton({
-    Name = "Summon Selected Boss",
-    Description = "Start a raid against the selected world boss",
-    Callback = function()
-        local boss = world_boss_dropdown.CurrentOption
-        if type(boss) == "table" then
-            boss = boss[1]
-        end
-        
-        Utilities.SummonEnemy(boss)
-    end
-})
 
 -- Exploration Tab
 TabExploration:CreateSection("Exploration Management")
