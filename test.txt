@@ -1,14 +1,14 @@
--- Luna Interface Suite loader
+-- Luna Interface Suite laden
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
--- Create window with MythHub branding
+-- Fenster erstellen
 local Window = Luna:CreateWindow({
     Name = "Anime Card Clash - MythHub", 
     Subtitle = "v1.0",
     LogoID = nil, 
     LoadingEnabled = true,
-    LoadingTitle = "Anime Card Clash",
-    LoadingSubtitle = "MythHub Loading...",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "MythHub preparing...",
     
     ConfigSettings = {
         ConfigFolder = "MythHub_AnimeCardClash"
@@ -19,9 +19,9 @@ local Window = Luna:CreateWindow({
 
 -- ###################### DASHBOARD TAB ######################
 local DashboardTab = Window:CreateTab({
-    Name = "Dashboard",
-    Icon = "home", -- Simple icon without spaces
-    ImageSource = "Material", -- Important: Must specify "Material" as source
+    Name = "📊 Dashboard",
+    Icon = "",
+    ImageSource = "Lucide",
     ShowTitle = true
 })
 
@@ -51,8 +51,8 @@ DashboardTab:CreateParagraph({
 -- ###################### AUTOFARM TAB ######################
 local AutoFarmTab = Window:CreateTab({
     Name = "⚔️ AutoFarm",
-    Icon = "bolt", -- Simple icon without spaces
-    ImageSource = "Material",
+    Icon = "",
+    ImageSource = "Lucide",
     ShowTitle = true
 })
 
@@ -177,8 +177,8 @@ local killLogParagraph = AutoFarmTab:CreateParagraph({
 -- ###################### TOWERS TAB ######################
 local TowersTab = Window:CreateTab({
     Name = "🗼 Towers",
-    Icon = "castle", -- Simple icon without spaces
-    ImageSource = "Material",
+    Icon = "",
+    ImageSource = "Lucide",
     ShowTitle = true
 })
 
@@ -304,11 +304,72 @@ local autoStartToggle = TowersTab:CreateToggle({
     end
 }, "AutoStartToggle")
 
+-- ###################### RAIDS TAB ######################
+local RaidsTab = Window:CreateTab({
+    Name = "🚧 Raids",
+    Icon = "",
+    ImageSource = "Lucide",
+    ShowTitle = true
+})
+
+-- Coming Soon Display
+RaidsTab:CreateParagraph({
+    Title = "Coming Soon...", 
+    Text = "Raid functions will be added in a future update."
+})
+
+-- ###################### EXPLORATION TAB ######################
+local ExplorationTab = Window:CreateTab({
+    Name = "🌍 Exploration",
+    Icon = "",
+    ImageSource = "Lucide",
+    ShowTitle = true
+})
+
+-- Coming Soon Display with preview functions
+ExplorationTab:CreateParagraph({
+    Title = "Coming Soon...", 
+    Text = "Full exploration features will be added in a future update."
+})
+
+-- Preview functions
+local autoPickupToggle = ExplorationTab:CreateToggle({
+    Name = "AutoPickup Items",
+    Description = "Automatically collects items nearby",
+    CurrentValue = false,
+    Callback = function(Value)
+        -- Implement AutoPickup logic here
+    end
+}, "AutoPickupToggle")
+
+local tweenToItemToggle = ExplorationTab:CreateToggle({
+    Name = "Tween to nearest item",
+    Description = "Moves the character to the nearest item",
+    CurrentValue = false,
+    Callback = function(Value)
+        -- Implement Tween logic here
+    end
+}, "TweenToItemToggle")
+
+-- ###################### SHOP TAB ######################
+local ShopTab = Window:CreateTab({
+    Name = "🛒 Shop",
+    Icon = "",
+    ImageSource = "Lucide",
+    ShowTitle = true
+})
+
+-- Coming Soon Display
+ShopTab:CreateParagraph({
+    Title = "Coming Soon...", 
+    Text = "Shop features will be added in a future update."
+})
+
 -- ###################### MISC TAB ######################
 local MiscTab = Window:CreateTab({
     Name = "🛠️ Misc",
-    Icon = "build", -- Simple icon without spaces
-    ImageSource = "Material",
+    Icon = "",
+    ImageSource = "Lucide",
     ShowTitle = true
 })
 
@@ -387,8 +448,8 @@ local enemyCooldownsParagraph = MiscTab:CreateParagraph({
 -- ###################### SETTINGS TAB ######################
 local SettingsTab = Window:CreateTab({
     Name = "⚙️ Settings",
-    Icon = "settings", -- Simple icon without spaces
-    ImageSource = "Material",
+    Icon = "",
+    ImageSource = "Lucide",
     ShowTitle = true
 })
 
@@ -407,7 +468,7 @@ local UIBind = SettingsTab:CreateBind({
     Callback = function() end,
     OnChangedCallback = function(Bind)
         Window.Bind = Bind
-    end,
+    end
 }, "UIToggleKeybind")
 
 -- IMPORTANT: Load auto-configuration (must be at the end!)
