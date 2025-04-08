@@ -1,5 +1,12 @@
 -- Luna Interface Suite laden
-local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
+local success, Luna = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
+end)
+
+if not success then
+    warn("Luna Interface Suite konnte nicht geladen werden!")
+    return
+end
 
 -- Fenster erstellen
 local Window = Luna:CreateWindow({
@@ -17,7 +24,7 @@ local Window = Luna:CreateWindow({
     KeySystem = false
 })
 
--- Universal Tab erstellen
+-- Universal Tab erstellen (mit pcall für Fehlerbehandlung)
 local UniversalTab = Window:CreateTab({
     Name = "Universal",
     Icon = "globe",
@@ -25,122 +32,30 @@ local UniversalTab = Window:CreateTab({
     ShowTitle = true
 })
 
+-- Tab-Inhaltstest
+UniversalTab:CreateParagraph({
+    Title = "Tab Test", 
+    Text = "Wenn du diesen Text siehst, funktionieren die Tabs korrekt!"
+})
+
 -- Geschwindigkeit & Sprung Sektion
 UniversalTab:CreateSection("Geschwindigkeit & Sprung")
 
 -- WalkSpeed Toggle
-local WalkSpeedToggle = UniversalTab:CreateToggle({
+UniversalTab:CreateToggle({
     Name = "Schneller Laufen",
     Description = "Erhöht deine Laufgeschwindigkeit",
     CurrentValue = false,
     Callback = function(Value)
-        if Value then
-            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 50
-        else
-            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
-        end
+        pcall(function()
+            if Value then
+                game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 50
+            else
+                game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+            end
+        end)
     end
 }, "WalkSpeedToggle")
-
--- JumpPower Toggle
-local JumpPowerToggle = UniversalTab:CreateToggle({
-    Name = "Höher Springen",
-    Description = "Erhöht deine Sprunghöhe",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value then
-            game.Players.LocalPlayer.Character.Humanoid.JumpPower = 100
-        else
-            game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50
-        end
-    end
-}, "JumpPowerToggle")
-
--- ESP Funktionen
-UniversalTab:CreateSection("ESP Funktionen")
-
--- ESP Button
-local ESPButton = UniversalTab:CreateButton({
-    Name = "ESP aktivieren",
-    Description = "Zeigt Spieler durch Wände",
-    Callback = function()
-        Luna:Notification({ 
-            Title = "ESP aktiviert",
-            Icon = "visibility",
-            ImageSource = "Material",
-            Content = "ESP Funktion wurde aktiviert!"
-        })
-        -- Hier würde der eigentliche ESP-Code kommen
-    end
-})
-
--- Spiele Scripts Tab
-local GameScriptsTab = Window:CreateTab({
-    Name = "Spiele Scripts",
-    Icon = "sports_esports",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
--- Aktuelles Spiel erkennen
-GameScriptsTab:CreateSection("Aktuelles Spiel")
-
--- Label für das aktuelle Spiel
-local gameLabel = GameScriptsTab:CreateLabel({
-    Text = "Aktuelles Spiel: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name,
-    Style = 1
-})
-
--- Beliebte Spiele Sektion
-GameScriptsTab:CreateSection("Beliebte Spiele")
-
--- Adopt Me Button
-local AdoptMeButton = GameScriptsTab:CreateButton({
-    Name = "Adopt Me",
-    Description = "Adopt Me Script laden",
-    Callback = function()
-        if game.PlaceId == 920587237 then -- Adopt Me PlaceId
-            Luna:Notification({ 
-                Title = "Script geladen",
-                Icon = "check_circle",
-                ImageSource = "Material",
-                Content = "Adopt Me Script wurde geladen!"
-            })
-            -- Hier würde der Loadstring für das Adopt Me Script kommen
-        else
-            Luna:Notification({ 
-                Title = "Fehler",
-                Icon = "error",
-                ImageSource = "Material",
-                Content = "Du bist nicht in Adopt Me!"
-            })
-        end
-    end
-})
-
--- Jailbreak Button
-local JailbreakButton = GameScriptsTab:CreateButton({
-    Name = "Jailbreak",
-    Description = "Jailbreak Script laden",
-    Callback = function()
-        if game.PlaceId == 606849621 then -- Jailbreak PlaceId
-            Luna:Notification({ 
-                Title = "Script geladen",
-                Icon = "check_circle",
-                ImageSource = "Material",
-                Content = "Jailbreak Script wurde geladen!"
-            })
-            -- Hier würde der Loadstring für das Jailbreak Script kommen
-        else
-            Luna:Notification({ 
-                Title = "Fehler",
-                Icon = "error",
-                ImageSource = "Material",
-                Content = "Du bist nicht in Jailbreak!"
-            })
-        end
-    end
-})
 
 -- Einstellungen Tab
 local SettingsTab = Window:CreateTab({
@@ -151,22 +66,10 @@ local SettingsTab = Window:CreateTab({
 })
 
 -- Theming Sektion hinzufügen
-SettingsTab:BuildThemeSection()
+pcall(function() SettingsTab:BuildThemeSection() end)
 
 -- Konfigurationssektion hinzufügen
-SettingsTab:BuildConfigSection()
+pcall(function() SettingsTab:BuildConfigSection() end)
 
--- Tastenkombination für UI-Toggle
-local UIBind = SettingsTab:CreateBind({
-    Name = "UI ein-/ausblenden",
-    Description = "Drücke diese Taste, um das UI ein-/auszublenden",
-    CurrentBind = "RightControl",
-    HoldToInteract = false,
-    Callback = function() end,
-    OnChangedCallback = function(Bind)
-        Window.Bind = Bind
-    end,
-}, "UIToggleKeybind")
-
--- Automatische Konfiguration laden
+-- WICHTIG: Automatische Konfiguration laden (muss am Ende sein!)
 Luna:LoadAutoloadConfig()
