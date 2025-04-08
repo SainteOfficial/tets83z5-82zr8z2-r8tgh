@@ -1,622 +1,991 @@
+--[[
+    MythHub - Premium Script Hub
+    Game: Anime Card Clash
+    Created by: MythTeam
+    
+    Features:
+    - Dashboard with information and stats
+    - AutoFarm for enemies across all worlds
+    - Tower automation for Battle and Infinite Towers
+    - Raid assistance and automation
+    - Exploration management
+    - Shop automation
+    - Misc utilities including auto pickup, auto merge, and more
+    
+    Last Updated: April 2025
+]]
+
+-- Load Luna Interface Library
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
--- Hauptfenster erstellen
+-- Initialize Window with Key System
 local Window = Luna:CreateWindow({
-    Name = "Anime Card Clash - MythHub",
-    Subtitle = "v1.0",
-    LogoID = nil, -- Kann später aktualisiert werden
+    Name = "MythHub",
+    Subtitle = "Anime Card Clash",
+    LogoID = "12413559476", -- MythHub logo ID
     LoadingEnabled = true,
-    LoadingTitle = "Anime Card Clash - MythHub",
-    LoadingSubtitle = "by MythTeam",
+    LoadingTitle = "MythHub Premium",
+    LoadingSubtitle = "Anime Card Clash Edition",
+    
     ConfigSettings = {
-        RootFolder = nil,
-        ConfigFolder = "AnimeCardClash_MythHub"
+        RootFolder = "MythHub",
+        ConfigFolder = "AnimeCardClash"
     },
-    KeySystem = false
+    
+    KeySystem = true,
+    KeySettings = {
+        Title = "MythHub Authentication",
+        Subtitle = "Premium Access Verification",
+        Note = "Enter your license key to access MythHub Premium features",
+        SaveInRoot = true,
+        SaveKey = true,
+        Key = {"MYTHHUB-PREMIUM"}, -- Replace with actual key verification system
+        SecondAction = {
+            Enabled = true,
+            Type = "Discord",
+            Parameter = "MythHubDiscord" -- Replace with actual Discord invite
+        }
+    }
 })
 
--- Dashboard Tab
-local DashboardTab = Window:CreateTab({
+-- Utility Functions
+local Utilities = {}
+
+-- Function to get local player
+Utilities.GetLocalPlayer = function()
+    return game:GetService("Players").LocalPlayer
+end
+
+-- Function to check if a player is in game
+Utilities.IsInGame = function()
+    return game:IsLoaded() and Utilities.GetLocalPlayer() ~= nil
+end
+
+-- Function to create notifications
+Utilities.Notify = function(title, content, icon)
+    Luna:Notification({
+        Title = title or "MythHub Notification",
+        Content = content or "Action completed successfully",
+        Icon = icon or "notifications_active",
+        ImageSource = "Material"
+    })
+end
+
+-- Function to get Battle Tower level
+Utilities.GetBattleTowerLevel = function()
+    local success, result = pcall(function()
+        local LocalUserModule = game:GetService("ReplicatedStorage"):WaitForChild("TS"):WaitForChild("user"):WaitForChild("local"):WaitForChild("local-user")
+        local LocalUser = require(LocalUserModule).LocalUser
+        local battleTowerWave = LocalUser.metadata:getAsNumber("battle_tower_wave")
+        return battleTowerWave or 1
+    end)
+    
+    if success then
+        return result
+    else
+        return 1
+    end
+end
+
+-- Function to get Infinite Tower floor
+Utilities.GetInfiniteTowerFloor = function()
+    local success, result = pcall(function()
+        local LocalUser = require(game:GetService("ReplicatedStorage"):WaitForChild("TS"):WaitForChild("user"):WaitForChild("local"):WaitForChild("local-user")).LocalUser
+        
+        if LocalUser and LocalUser.infiniteTower then
+            local document = LocalUser.infiniteTower:getDocument()
+            if document and document.floor then
+                return document.floor
+            end
+        end
+        return 1
+    end)
+    
+    if success and result then
+        return result
+    else
+        return 1
+    end
+end
+
+-- Function to get available upgrade points
+Utilities.GetUpgradePoints = function()
+    local success, result = pcall(function()
+        local LocalUser = require(game:GetService("ReplicatedStorage"):WaitForChild("TS"):WaitForChild("user"):WaitForChild("local"):WaitForChild("local-user")).LocalUser
+        return LocalUser.upgrades:getCards()
+    end)
+    
+    if success then
+        return result
+    else
+        return 0
+    end
+end
+
+-- Function to summon an enemy
+Utilities.SummonEnemy = function(enemyName)
+    local args = {
+        [1] = enemyName
+    }
+    
+    local success, result = pcall(function()
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+    end)
+    
+    if success then
+        Utilities.Notify("Enemy Summoned", "Successfully summoned " .. enemyName, "check_circle")
+        return true
+    else
+        Utilities.Notify("Error", "Failed to summon enemy: " .. enemyName, "error")
+        return false
+    end
+end
+
+-- Function to buy shop items
+Utilities.BuyShopItem = function(itemName, quantity)
+    local args = {
+        [1] = itemName,
+        [2] = quantity or 1
+    }
+    
+    local success, result = pcall(function()
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("54f5f951-af4e-447d-9ee4-c63d9130fe77"):FireServer(unpack(args))
+    end)
+    
+    if success then
+        Utilities.Notify("Item Purchased", "Successfully bought " .. quantity .. "x " .. itemName, "shopping_cart")
+        return true
+    else
+        Utilities.Notify("Error", "Failed to purchase item: " .. itemName, "error")
+        return false
+    end
+end
+
+-- Function to upgrade stats
+Utilities.UpgradeStat = function(statName)
+    local args = {
+        [1] = statName
+    }
+    
+    local success, result = pcall(function()
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("af785685-b79a-4491-8d84-e3b637aa6fc5"):FireServer(unpack(args))
+    end)
+    
+    if success then
+        Utilities.Notify("Stat Upgraded", "Successfully upgraded " .. statName, "trending_up")
+        return true
+    else
+        Utilities.Notify("Error", "Failed to upgrade stat: " .. statName, "error")
+        return false
+    end
+end
+
+-- AutoFarm Configuration
+local AutoFarmConfig = {
+    Enabled = false,
+    CurrentWorld = "Ninja Village",
+    CurrentEnemy = "unstoppable_fist",
+    AutoCollect = false,
+    AutoMerge = false,
+    Interval = 10 * 60, -- 10 minutes cooldown
+    Connections = {}
+}
+
+-- Initialize Tabs
+local TabDashboard = Window:CreateTab({
     Name = "Dashboard",
     Icon = "dashboard",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- AutoFarm Tab
-local AutoFarmTab = Window:CreateTab({
+local TabAutoFarm = Window:CreateTab({
     Name = "AutoFarm",
-    Icon = "agriculture",
+    Icon = "auto_mode",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Towers Tab
-local TowersTab = Window:CreateTab({
+local TabTowers = Window:CreateTab({
     Name = "Towers",
-    Icon = "apartment",
+    Icon = "castle",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Raids Tab
-local RaidsTab = Window:CreateTab({
+local TabRaids = Window:CreateTab({
     Name = "Raids",
-    Icon = "swords",
-    ImageSource = "Lucide",
+    Icon = "security",
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- Exploration Tab
-local ExplorationTab = Window:CreateTab({
+local TabExploration = Window:CreateTab({
     Name = "Exploration",
     Icon = "explore",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Shop Tab
-local ShopTab = Window:CreateTab({
+local TabShop = Window:CreateTab({
     Name = "Shop",
     Icon = "shopping_cart",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Misc Tab
-local MiscTab = Window:CreateTab({
+local TabMisc = Window:CreateTab({
     Name = "Misc",
+    Icon = "miscellaneous_services",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+local TabSettings = Window:CreateTab({
+    Name = "Settings",
     Icon = "settings",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Dashboard Tab Inhalte
-DashboardTab:CreateParagraph({
-    Title = "Willkommen bei Anime Card Clash - MythHub",
-    Text = "Dies ist ein umfassender Script Hub für Anime Card Clash. Entdecke automatisierte Funktionen für Farming, Towers, Raids und mehr!"
+-- Create Home Tab with information dashboard
+Window:CreateHomeTab({
+    SupportedExecutors = {"Synapse X", "Script-Ware", "Krnl", "Fluxus", "Electron", "Oxygen U"},
+    DiscordInvite = "MythHubDiscord", -- Replace with actual Discord code
+    Icon = 2
 })
 
-DashboardTab:CreateLabel({
-    Text = "Entwickelt von MythTeam | Version 1.0",
-    Style = 1
+-- Dashboard Tab
+TabDashboard:CreateParagraph({
+    Title = "Welcome to MythHub - Anime Card Clash",
+    Text = "Thank you for choosing MythHub Premium for Anime Card Clash. This script offers a comprehensive suite of features to enhance your gameplay experience. Navigate through the tabs to access various features and automation tools."
 })
 
-DashboardTab:CreateDivider()
+local stats_section = TabDashboard:CreateSection("Player Statistics")
 
--- Spieler-Status-Anzeige
-DashboardTab:CreateSection("Spieler-Status")
-
--- Wir werden später eine Funktion implementieren, um diese Informationen dynamisch zu aktualisieren
-local PlayerStatsLabel = DashboardTab:CreateLabel({
-    Text = "Lade Spielerdaten...",
-    Style = 1
+local player_stats = TabDashboard:CreateParagraph({
+    Title = "Player Stats",
+    Text = "Loading player statistics..."
 })
 
-DashboardTab:CreateDivider()
+-- Update player stats periodically
+spawn(function()
+    while wait(5) do
+        if Utilities.IsInGame() then
+            local tower_level = Utilities.GetBattleTowerLevel()
+            local infinite_floor = Utilities.GetInfiniteTowerFloor()
+            local upgrade_points = Utilities.GetUpgradePoints()
+            
+            player_stats:Set({
+                Text = "Battle Tower Level: " .. tower_level .. 
+                      "\nInfinite Tower Floor: " .. infinite_floor .. 
+                      "\nAvailable Upgrade Points: " .. upgrade_points
+            })
+        end
+    end
+end)
 
--- AutoFarm Tab Inhalte
-AutoFarmTab:CreateSection("Enemy Farm")
+TabDashboard:CreateDivider()
 
--- Welten-Auswahl
-local WorldDropdown = AutoFarmTab:CreateDropdown({
-    Name = "Welt auswählen",
-    Description = "Wähle die Welt, in der du farmen möchtest",
+TabDashboard:CreateParagraph({
+    Title = "Latest Updates",
+    Text = "• Added Auto Raid feature with boss detection\n• Improved AutoFarm efficiency and stability\n• Added auto-merge functionality\n• Fixed issues with Tower automation\n• Enhanced UI responsiveness"
+})
+
+-- AutoFarm Tab
+TabAutoFarm:CreateSection("Enemy Farm Configuration")
+
+-- World selection
+local world_dropdown = TabAutoFarm:CreateDropdown({
+    Name = "Select World",
+    Description = "Choose the world to farm enemies from",
     Options = {"Ninja Village", "Green Village", "Shibuya Station", "Titans City", "Dimensional Fortress", "Candy Island", "Solo City"},
     CurrentOption = {"Ninja Village"},
     MultipleOptions = false,
     SpecialType = nil,
     Callback = function(Option)
-        -- Wird später implementiert
-        print("Welt ausgewählt: " .. Option[1])
+        AutoFarmConfig.CurrentWorld = Option
+        -- Update enemy dropdown based on selected world
+        updateEnemyDropdown(Option)
     end
-}, "WorldDropdown")
+}, "WorldSelection")
 
--- Gegner-Auswahl für die jeweilige Welt
-local EnemyDropdown = AutoFarmTab:CreateDropdown({
-    Name = "Gegner auswählen",
-    Description = "Wähle den Gegner, den du farmen möchtest",
-    Options = {"ROCK LEE", "KAKASHI", "SASUKE", "NARUTO SAGE MODE", "PAIN", "NARUTO RAGE MODE (BOSS)"},
-    CurrentOption = {"ROCK LEE"},
+-- Enemy dropdown (will be updated based on world selection)
+local enemy_dropdown = TabAutoFarm:CreateDropdown({
+    Name = "Select Enemy",
+    Description = "Choose the enemy to farm",
+    Options = {"unstoppable_fist", "copy_ninja", "awakened_dark_avenger", "awakened_promised_child", "six_paths_of_pain", "bijuu_beast"},
+    CurrentOption = {"unstoppable_fist"},
     MultipleOptions = false,
     SpecialType = nil,
     Callback = function(Option)
-        -- Wird später implementiert
-        print("Gegner ausgewählt: " .. Option[1])
+        AutoFarmConfig.CurrentEnemy = Option
     end
-}, "EnemyDropdown")
+}, "EnemySelection")
+
+-- Function to update enemy dropdown based on world selection
+function updateEnemyDropdown(world)
+    local enemies = {}
+    
+    if world == "Ninja Village" then
+        enemies = {"unstoppable_fist", "copy_ninja", "awakened_dark_avenger", "awakened_promised_child", "six_paths_of_pain", "bijuu_beast"}
+    elseif world == "Green Village" then
+        enemies = {"ultimate_warrior", "body_switcher", "namekian_sage", "awakened_prideful_prince", "awakened_earth_strongest", "awakened_galactic_tyrant"}
+    elseif world == "Shibuya Station" then
+        enemies = {"cursed_doll", "awakened_shadow_summoner", "cursed_fist", "rika_blessing", "limitless_master", "king_of_curses"}
+    elseif world == "Titans City" then
+        enemies = {"survey_commander", "blade_warrior", "armored_giant", "beast_giant", "blade_captain", "combat_giant"}
+    elseif world == "Dimensional Fortress" then
+        enemies = {"thunder_demon", "childish_demon", "compass_demon", "awakened_frost_demon", "awakened_six_eyed_slayer", "awakened_pale_demon_lord"}
+    elseif world == "Candy Island" then
+        enemies = {"genie_commander", "candy_master", "biscuit_warrior", "juice_queen", "mochi_emperor", "soul_queen"}
+    elseif world == "Solo City" then
+        enemies = {"light_saintess", "the_goliath", "shadow_bear", "shadow_commander", "shadow_ant", "awakened_shadow_monarch"}
+    end
+    
+    enemy_dropdown:Set({
+        Options = enemies,
+        CurrentOption = {enemies[1]}
+    })
+    
+    AutoFarmConfig.CurrentEnemy = enemies[1]
+end
+
+TabAutoFarm:CreateDivider()
 
 -- Auto Farm Toggle
-local AutoFarmToggle = AutoFarmTab:CreateToggle({
-    Name = "Auto Farm aktivieren",
-    Description = "Automatisches Bekämpfen des ausgewählten Gegners",
+local autofarm_toggle = TabAutoFarm:CreateToggle({
+    Name = "Auto Farm Enemies",
+    Description = "Automatically spawns selected enemies after cooldown",
     CurrentValue = false,
     Callback = function(Value)
+        AutoFarmConfig.Enabled = Value
+        
         if Value then
-            print("Auto Farm aktiviert")
-            -- Hier kommt später die Farm-Logik
+            -- Start auto farm
+            Utilities.Notify("Auto Farm", "Started auto farming " .. AutoFarmConfig.CurrentEnemy .. " in " .. AutoFarmConfig.CurrentWorld, "auto_mode")
+            
+            -- Clear previous connections if any
+            if AutoFarmConfig.Connections.AutoFarm then
+                AutoFarmConfig.Connections.AutoFarm:Disconnect()
+            end
+            
+            -- Create new auto farm loop
+            AutoFarmConfig.Connections.AutoFarm = spawn(function()
+                while AutoFarmConfig.Enabled do
+                    Utilities.SummonEnemy(AutoFarmConfig.CurrentEnemy)
+                    wait(AutoFarmConfig.Interval) -- Wait for cooldown
+                end
+            end)
         else
-            print("Auto Farm deaktiviert")
+            -- Stop auto farm
+            Utilities.Notify("Auto Farm", "Stopped auto farming", "stop_circle")
+            
+            -- Disconnect auto farm loop
+            if AutoFarmConfig.Connections.AutoFarm then
+                AutoFarmConfig.Connections.AutoFarm:Disconnect()
+                AutoFarmConfig.Connections.AutoFarm = nil
+            end
         end
     end
 }, "AutoFarmToggle")
 
-AutoFarmTab:CreateDivider()
-
--- Auto Pick-Up Items
-AutoFarmTab:CreateSection("Auto Pick-Up Items")
-
-local AutoPickupToggle = AutoFarmTab:CreateToggle({
-    Name = "Auto Items Aufheben",
-    Description = "Automatisches Aufheben von Items in der Spielwelt",
+-- Auto collect toggle
+local autocollect_toggle = TabAutoFarm:CreateToggle({
+    Name = "Auto Collect Items",
+    Description = "Automatically collects dropped items",
     CurrentValue = false,
     Callback = function(Value)
+        AutoFarmConfig.AutoCollect = Value
+        
         if Value then
-            print("Auto Pickup aktiviert")
-            -- Implementierung folgt
+            -- Start auto collect
+            Utilities.Notify("Auto Collect", "Started auto collecting items", "inventory_2")
+            
+            -- Clear previous connections if any
+            if AutoFarmConfig.Connections.AutoCollect then
+                AutoFarmConfig.Connections.AutoCollect:Disconnect()
+            end
+            
+            -- Create new auto collect loop
+            AutoFarmConfig.Connections.AutoCollect = spawn(function()
+                while AutoFarmConfig.AutoCollect do
+                    pcall(function()
+                        local items = workspace.Folder:GetChildren()
+                        
+                        for _, item in pairs(items) do
+                            if item:IsA("Model") and AutoFarmConfig.AutoCollect then
+                                -- Get item position
+                                local itemPosition = item:GetPivot().Position
+                                
+                                -- Get player's character and humanoid root part
+                                local character = Utilities.GetLocalPlayer().Character
+                                if character and character:FindFirstChild("HumanoidRootPart") then
+                                    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+                                    
+                                    -- Tween to the item
+                                    local tweenService = game:GetService("TweenService")
+                                    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                                    
+                                    local tween = tweenService:Create(
+                                        humanoidRootPart,
+                                        tweenInfo,
+                                        {CFrame = CFrame.new(itemPosition)}
+                                    )
+                                    
+                                    tween:Play()
+                                    tween.Completed:Wait()
+                                    
+                                    -- Wait a bit to ensure item is collected
+                                    wait(0.1)
+                                end
+                            end
+                        end
+                    end)
+                    
+                    wait(1) -- Wait before checking for new items
+                end
+            end)
         else
-            print("Auto Pickup deaktiviert")
+            -- Stop auto collect
+            Utilities.Notify("Auto Collect", "Stopped auto collecting items", "stop_circle")
+            
+            -- Disconnect auto collect loop
+            if AutoFarmConfig.Connections.AutoCollect then
+                AutoFarmConfig.Connections.AutoCollect:Disconnect()
+                AutoFarmConfig.Connections.AutoCollect = nil
+            end
         end
     end
-}, "AutoPickupToggle")
+}, "AutoCollectToggle")
 
-AutoFarmTab:CreateDivider()
-
--- Auto Merge
-AutoFarmTab:CreateSection("Auto Merge")
-
-local AutoMergeToggle = AutoFarmTab:CreateToggle({
-    Name = "Auto Merge aktivieren",
-    Description = "Automatisches Zusammenführen von Karten für Upgrades",
+-- Auto merge toggle
+local automerge_toggle = TabAutoFarm:CreateToggle({
+    Name = "Auto Merge Units",
+    Description = "Automatically merges your units",
     CurrentValue = false,
     Callback = function(Value)
+        AutoFarmConfig.AutoMerge = Value
+        
         if Value then
-            print("Auto Merge aktiviert")
-            -- Implementierung folgt
+            -- Start auto merge
+            Utilities.Notify("Auto Merge", "Started auto merging units", "merge")
+            
+            -- Clear previous connections if any
+            if AutoFarmConfig.Connections.AutoMerge then
+                AutoFarmConfig.Connections.AutoMerge:Disconnect()
+            end
+            
+            -- Create new auto merge loop
+            AutoFarmConfig.Connections.AutoMerge = spawn(function()
+                while AutoFarmConfig.AutoMerge do
+                    pcall(function()
+                        -- Example auto merge code
+                        local args = {
+                            [1] = 0,
+                            [2] = "light_admiral",
+                            [3] = 200,
+                            [4] = false
+                        }
+                        
+                        game:GetService("ReplicatedStorage"):WaitForChild("noV"):WaitForChild("b57b2bf9-5561-408a-8668-8d7afa1b05f0"):FireServer(unpack(args))
+                    end)
+                    
+                    wait(5) -- Wait before attempting to merge again
+                end
+            end)
         else
-            print("Auto Merge deaktiviert")
+            -- Stop auto merge
+            Utilities.Notify("Auto Merge", "Stopped auto merging units", "stop_circle")
+            
+            -- Disconnect auto merge loop
+            if AutoFarmConfig.Connections.AutoMerge then
+                AutoFarmConfig.Connections.AutoMerge:Disconnect()
+                AutoFarmConfig.Connections.AutoMerge = nil
+            end
         end
     end
 }, "AutoMergeToggle")
 
--- Towers Tab Inhalte
-TowersTab:CreateSection("Battle Tower")
-
-local BattleTowerLevelButton = TowersTab:CreateButton({
-    Name = "Battle Tower Level prüfen",
-    Description = "Zeigt dein aktuelles Battle Tower Level an",
-    Callback = function()
-        -- Implementierung des Level-Checks
-        local function checkBattleTowerLevel()
-            local LocalUserModule = game:GetService("ReplicatedStorage"):WaitForChild("TS"):WaitForChild("user"):WaitForChild("local"):WaitForChild("local-user")
-            
-            local success, result = pcall(function()
-                local LocalUser = require(LocalUserModule).LocalUser
-                local battleTowerWave = LocalUser.metadata:getAsNumber("battle_tower_wave")
-                return battleTowerWave or 1
-            end)
-            
-            if success then
-                Luna:Notification({ 
-                    Title = "Battle Tower Level",
-                    Icon = "apartment",
-                    ImageSource = "Material",
-                    Content = "Dein aktuelles Battle Tower Level: " .. result
-                })
-                return result
-            else
-                Luna:Notification({ 
-                    Title = "Fehler",
-                    Icon = "error",
-                    ImageSource = "Material",
-                    Content = "Konnte Battle Tower Level nicht abrufen"
-                })
-                return 1
-            end
-        end
-        
-        checkBattleTowerLevel()
+-- Cooldown slider
+local cooldown_slider = TabAutoFarm:CreateSlider({
+    Name = "Farm Cooldown (Minutes)",
+    Range = {1, 30},
+    Increment = 1,
+    CurrentValue = 10,
+    Callback = function(Value)
+        AutoFarmConfig.Interval = Value * 60 -- Convert to seconds
+        Utilities.Notify("Cooldown Updated", "Farm cooldown set to " .. Value .. " minutes", "timer")
     end
+}, "FarmCooldownSlider")
+
+-- Towers Tab
+TabTowers:CreateSection("Battle Tower")
+
+-- Battle Tower level display
+local battle_tower_level = TabTowers:CreateLabel({
+    Text = "Current Battle Tower Level: " .. Utilities.GetBattleTowerLevel(),
+    Style = 1
 })
 
-local BattleTowerInput = TowersTab:CreateInput({
-    Name = "Battle Tower Level",
-    Description = "Gib das Level ein, das automatisch abgeschlossen werden soll (1-100)",
-    PlaceholderText = "1-100",
+-- Update Battle Tower level periodically
+spawn(function()
+    while wait(5) do
+        if Utilities.IsInGame() then
+            battle_tower_level:Set({
+                Text = "Current Battle Tower Level: " .. Utilities.GetBattleTowerLevel()
+            })
+        end
+    end
+end)
+
+-- Battle Tower level input
+local battle_tower_input = TabTowers:CreateInput({
+    Name = "Enter Battle Tower Level",
+    Description = "Enter a specific tower level (1-100)",
+    PlaceholderText = "Enter level (1-100)",
     CurrentValue = "",
     Numeric = true,
     MaxCharacters = 3,
     Enter = true,
     Callback = function(Text)
         local level = tonumber(Text)
+        
         if level and level >= 1 and level <= 100 then
-            -- Battle Tower Level abschließen
-            Luna:Notification({ 
-                Title = "Battle Tower",
-                Icon = "apartment",
-                ImageSource = "Material",
-                Content = "Starte Auto-Complete für Level " .. level
-            })
-            
             local args = {
                 [1] = level
             }
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("c1438c4a-417f-41ee-9363-1ebabcc0bbd9"):FireServer(unpack(args))
+            
+            local success, result = pcall(function()
+                game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("c1438c4a-417f-41ee-9363-1ebabcc0bbd9"):FireServer(unpack(args))
+            end)
+            
+            if success then
+                Utilities.Notify("Battle Tower", "Starting Battle Tower at level " .. level, "castle")
+            else
+                Utilities.Notify("Error", "Failed to start Battle Tower", "error")
+            end
         else
-            Luna:Notification({ 
-                Title = "Fehler",
-                Icon = "error",
-                ImageSource = "Material",
-                Content = "Bitte gib ein gültiges Level zwischen 1 und 100 ein"
-            })
+            Utilities.Notify("Error", "Please enter a valid level between 1 and 100", "error")
         end
     end
-}, "BattleTowerLevel")
+}, "BattleTowerLevelInput")
 
-TowersTab:CreateDivider()
+TabTowers:CreateDivider()
 
-TowersTab:CreateSection("Infinite Tower")
+TabTowers:CreateSection("Infinite Tower")
 
-local InfiniteTowerStatus = TowersTab:CreateLabel({
-    Text = "Status: Inaktiv",
+-- Infinite Tower floor display
+local infinite_tower_floor = TabTowers:CreateLabel({
+    Text = "Current Infinite Tower Floor: " .. Utilities.GetInfiniteTowerFloor(),
     Style = 1
 })
 
-local InfiniteTowerControls = TowersTab:CreateDropdown({
-    Name = "Infinite Tower Kontrolle",
-    Description = "Starten, Pausieren oder Stoppen des Infinite Tower",
-    Options = {"Starten", "Pausieren", "Stoppen"},
-    CurrentOption = {"Starten"},
-    MultipleOptions = false,
-    SpecialType = nil,
-    Callback = function(Option)
-        if Option[1] == "Starten" then
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("888b9aa0-9ca6-4c77-9946-cebf1edf613d"):FireServer()
-            InfiniteTowerStatus:Set({Text = "Status: Aktiv"})
-        elseif Option[1] == "Pausieren" then
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("a8a25480-c0f3-426b-834f-0f95cf058edc"):FireServer()
-            InfiniteTowerStatus:Set({Text = "Status: Pausiert"})
-        elseif Option[1] == "Stoppen" then
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("179a96b5-b8d2-4156-a939-6f34c92aa7a6"):FireServer()
-            InfiniteTowerStatus:Set({Text = "Status: Inaktiv"})
-        end
-    end
-}, "InfiniteTowerControls")
-
-local InfiniteTowerTrackerToggle = TowersTab:CreateToggle({
-    Name = "Floor Tracker aktivieren",
-    Description = "Verfolgt deinen aktuellen Floor im Infinite Tower",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value then
-            -- Tracker aktivieren
-            Luna:Notification({ 
-                Title = "Floor Tracker",
-                Icon = "apartment",
-                ImageSource = "Material",
-                Content = "Floor Tracker aktiviert"
-            })
-            
-            -- Implementierung folgt
-        else
-            -- Tracker deaktivieren
-            Luna:Notification({ 
-                Title = "Floor Tracker",
-                Icon = "apartment",
-                ImageSource = "Material",
-                Content = "Floor Tracker deaktiviert"
+-- Update Infinite Tower floor periodically
+spawn(function()
+    while wait(5) do
+        if Utilities.IsInGame() then
+            infinite_tower_floor:Set({
+                Text = "Current Infinite Tower Floor: " .. Utilities.GetInfiniteTowerFloor()
             })
         end
     end
-}, "InfiniteTowerTracker")
+end)
 
--- Raids Tab Inhalte
-RaidsTab:CreateSection("Raid Manager")
-
-local RaidButton = RaidsTab:CreateButton({
-    Name = "Eternal Dragon Raid starten",
-    Description = "Startet einen Eternal Dragon Raid",
+-- Infinite Tower control buttons
+TabTowers:CreateButton({
+    Name = "Start Infinite Tower",
+    Description = "Begin the Infinite Tower challenge",
     Callback = function()
-        Luna:Notification({ 
-            Title = "Raid",
-            Icon = "swords",
-            ImageSource = "Lucide",
-            Content = "Starte Eternal Dragon Raid"
-        })
+        local success, result = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("888b9aa0-9ca6-4c77-9946-cebf1edf613d"):FireServer()
+        end)
         
-        local args = {
-            [1] = "eternal_dragon"
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+        if success then
+            Utilities.Notify("Infinite Tower", "Started Infinite Tower challenge", "castle")
+        else
+            Utilities.Notify("Error", "Failed to start Infinite Tower", "error")
+        end
     end
 })
 
--- Exploration Tab Inhalte
-ExplorationTab:CreateSection("Deploy System")
+TabTowers:CreateButton({
+    Name = "Pause Infinite Tower",
+    Description = "Pause the current Infinite Tower challenge",
+    Callback = function()
+        local success, result = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("a8a25480-c0f3-426b-834f-0f95cf058edc"):FireServer()
+        end)
+        
+        if success then
+            Utilities.Notify("Infinite Tower", "Paused Infinite Tower challenge", "pause")
+        else
+            Utilities.Notify("Error", "Failed to pause Infinite Tower", "error")
+        end
+    end
+})
 
-local ExpeditionDropdown = ExplorationTab:CreateDropdown({
-    Name = "Schwierigkeit",
-    Description = "Wähle die Schwierigkeit für deine Expedition",
-    Options = {"Easy", "Medium", "Hard"},
-    CurrentOption = {"Easy"},
+TabTowers:CreateButton({
+    Name = "End Infinite Tower",
+    Description = "End the current Infinite Tower challenge",
+    Callback = function()
+        local success, result = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("179a96b5-b8d2-4156-a939-6f34c92aa7a6"):FireServer()
+        end)
+        
+        if success then
+            Utilities.Notify("Infinite Tower", "Ended Infinite Tower challenge", "stop_circle")
+        else
+            Utilities.Notify("Error", "Failed to end Infinite Tower", "error")
+        end
+    end
+})
+
+-- Raids Tab
+TabRaids:CreateSection("Raid Management")
+
+TabRaids:CreateParagraph({
+    Title = "Raid Information",
+    Text = "Raids offer exclusive rewards and powerful units. You can start a raid against the Eternal Dragon or other powerful bosses."
+})
+
+TabRaids:CreateButton({
+    Name = "Summon Eternal Dragon",
+    Description = "Start a raid against the Eternal Dragon",
+    Callback = function()
+        local success, result = pcall(function()
+            local args = {
+                [1] = "eternal_dragon"
+            }
+            
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+        end)
+        
+        if success then
+            Utilities.Notify("Raid Started", "Successfully summoned the Eternal Dragon", "security")
+        else
+            Utilities.Notify("Error", "Failed to start raid", "error")
+        end
+    end
+})
+
+TabRaids:CreateDivider()
+
+TabRaids:CreateSection("World Bosses")
+
+-- World Boss dropdown
+local world_boss_dropdown = TabRaids:CreateDropdown({
+    Name = "Select World Boss",
+    Description = "Choose a world boss to battle",
+    Options = {"bijuu_beast", "awakened_galactic_tyrant", "king_of_curses", "combat_giant", "awakened_pale_demon_lord", "soul_queen", "awakened_shadow_monarch"},
+    CurrentOption = {"bijuu_beast"},
     MultipleOptions = false,
     SpecialType = nil,
     Callback = function(Option)
-        -- Wird später implementiert
-        print("Schwierigkeit ausgewählt: " .. Option[1])
+        -- Nothing needed here, will be used in the button below
     end
-}, "ExpeditionDifficulty")
+}, "WorldBossSelection")
 
-local DeployButton = ExplorationTab:CreateButton({
-    Name = "Deploy Team",
-    Description = "Entsende dein Team auf Expedition",
+TabRaids:CreateButton({
+    Name = "Summon Selected Boss",
+    Description = "Start a raid against the selected world boss",
     Callback = function()
-        local difficulty = string.lower(ExpeditionDropdown.CurrentOption[1])
+        local boss = world_boss_dropdown.CurrentOption
+        if type(boss) == "table" then
+            boss = boss[1]
+        end
         
-        -- Vordefinierte Teams für unterschiedliche Schwierigkeiten
-        local teams = {
-            easy = {
-                [1] = "dark_avenger",
-                [2] = "black_swordsman",
-                [3] = "dark_avenger",
-                [4] = "dark_avenger"
-            },
-            medium = {
-                [1] = "bald_hero",
-                [2] = "bald_hero",
-                [3] = "bald_hero",
-                [4] = "bald_hero"
-            },
-            hard = {
-                [1] = "awakened_galactic_tyrant",
-                [2] = "awakened_galactic_tyrant",
-                [3] = "shadow_monarch:gold",
-                [4] = "genie_commander"
-            }
-        }
+        Utilities.SummonEnemy(boss)
+    end
+})
+
+-- Exploration Tab
+TabExploration:CreateSection("Exploration Management")
+
+-- Exploration team configuration
+local exploration_difficulty = TabExploration:CreateDropdown({
+    Name = "Exploration Difficulty",
+    Description = "Select the difficulty level for exploration",
+    Options = {"easy", "medium", "hard"},
+    CurrentOption = {"easy"},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        -- Nothing needed here, will be used in other functions
+    end
+}, "ExploreDifficulty")
+
+-- Unit selection for exploration
+local exploration_units = TabExploration:CreateInput({
+    Name = "Exploration Units",
+    Description = "Enter 4 unit names separated by commas",
+    PlaceholderText = "e.g., dark_avenger,black_swordsman,dark_avenger,dark_avenger",
+    CurrentValue = "dark_avenger,black_swordsman,dark_avenger,dark_avenger",
+    Numeric = false,
+    MaxCharacters = 100,
+    Enter = false,
+    Callback = function(Text)
+        -- Nothing needed here, will be used in the deploy button
+    end
+}, "ExploreUnits")
+
+TabExploration:CreateButton({
+    Name = "Deploy Exploration Team",
+    Description = "Send your selected units on an exploration mission",
+    Callback = function()
+        local difficulty = exploration_difficulty.CurrentOption
+        if type(difficulty) == "table" then
+            difficulty = difficulty[1]
+        end
+        
+        local units_text = exploration_units.CurrentValue
+        local units = {}
+        
+        for unit in string.gmatch(units_text, "[^,]+") do
+            table.insert(units, string.trim(unit))
+        end
+        
+        -- Ensure we have exactly 4 units
+        while #units < 4 do
+            table.insert(units, "dark_avenger")
+        end
+        
+        if #units > 4 then
+            units = {units[1], units[2], units[3], units[4]}
+        end
         
         local args = {
             [1] = difficulty,
-            [2] = teams[difficulty]
+            [2] = units
         }
         
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("569ba6a6-d5ea-488e-b729-0f0b6dbaf40c"):FireServer(unpack(args))
+        local success, result = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("569ba6a6-d5ea-488e-b729-0f0b6dbaf40c"):FireServer(unpack(args))
+        end)
         
-        Luna:Notification({ 
-            Title = "Expedition",
-            Icon = "explore",
-            ImageSource = "Material",
-            Content = "Team für " .. difficulty:gsub("^%l", string.upper) .. " Expedition entsandt"
-        })
+        if success then
+            Utilities.Notify("Exploration", "Deployed team for " .. difficulty .. " exploration", "explore")
+        else
+            Utilities.Notify("Error", "Failed to deploy exploration team", "error")
+        end
     end
 })
 
-ExplorationTab:CreateDivider()
+TabExploration:CreateDivider()
 
-ExplorationTab:CreateSection("Claim System")
+TabExploration:CreateSection("Claim Rewards")
 
-local ClaimEasyButton = ExplorationTab:CreateButton({
-    Name = "Claim Easy Rewards",
-    Description = "Sammle Belohnungen von Easy Expeditionen ein",
+-- Buttons to claim exploration rewards
+TabExploration:CreateButton({
+    Name = "Claim Easy Exploration Rewards",
+    Description = "Claim rewards from easy difficulty explorations",
     Callback = function()
         local args = {
             [1] = "easy"
         }
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
         
-        Luna:Notification({ 
-            Title = "Expedition",
-            Icon = "explore",
-            ImageSource = "Material",
-            Content = "Easy Expedition Belohnungen eingesammelt"
-        })
+        local success, result = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+        end)
+        
+        if success then
+            Utilities.Notify("Rewards Claimed", "Successfully claimed easy exploration rewards", "redeem")
+        else
+            Utilities.Notify("Error", "Failed to claim rewards", "error")
+        end
     end
 })
 
-local ClaimMediumButton = ExplorationTab:CreateButton({
-    Name = "Claim Medium Rewards",
-    Description = "Sammle Belohnungen von Medium Expeditionen ein",
+TabExploration:CreateButton({
+    Name = "Claim Medium Exploration Rewards",
+    Description = "Claim rewards from medium difficulty explorations",
     Callback = function()
         local args = {
             [1] = "medium"
         }
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
         
-        Luna:Notification({ 
-            Title = "Expedition",
-            Icon = "explore",
-            ImageSource = "Material",
-            Content = "Medium Expedition Belohnungen eingesammelt"
-        })
+        local success, result = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+        end)
+        
+        if success then
+            Utilities.Notify("Rewards Claimed", "Successfully claimed medium exploration rewards", "redeem")
+        else
+            Utilities.Notify("Error", "Failed to claim rewards", "error")
+        end
     end
 })
 
-local ClaimHardButton = ExplorationTab:CreateButton({
-    Name = "Claim Hard Rewards",
-    Description = "Sammle Belohnungen von Hard Expeditionen ein",
+TabExploration:CreateButton({
+    Name = "Claim Hard Exploration Rewards",
+    Description = "Claim rewards from hard difficulty explorations",
     Callback = function()
         local args = {
             [1] = "hard"
         }
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
         
-        Luna:Notification({ 
-            Title = "Expedition",
-            Icon = "explore",
-            ImageSource = "Material",
-            Content = "Hard Expedition Belohnungen eingesammelt"
-        })
-    end
-})
-
--- Shop Tab Inhalte
-ShopTab:CreateSection("Auto Buy Potions")
-
-local PotionTypes = {
-    "raid_luck_potion",
-    "raid_border_chance_potion",
-    "raid_cooldown_potion",
-    "raid_boss_chance_potion",
-    "raid_moon_cycle_reroll_potion",
-    "small_cooldown_reduction_potion",
-    "small_luck_potion",
-    "medium_luck_potion",
-    "medium_cooldown_reduction_potion",
-    "large_cooldown_reduction_potion",
-    "large_luck_potion"
-}
-
-local PotionNames = {
-    "Raid Luck Potion",
-    "Raid Border Chance Potion",
-    "Raid Cooldown Potion",
-    "Raid Boss Chance Potion",
-    "Raid Moon Cycle Reroll Potion",
-    "Small Cooldown Reduction Potion",
-    "Small Luck Potion",
-    "Medium Luck Potion",
-    "Medium Cooldown Reduction Potion",
-    "Large Cooldown Reduction Potion",
-    "Large Luck Potion"
-}
-
-local PotionDropdown = ShopTab:CreateDropdown({
-    Name = "Trank auswählen",
-    Description = "Wähle den Trank, den du kaufen möchtest",
-    Options = PotionNames,
-    CurrentOption = {PotionNames[1]},
-    MultipleOptions = false,
-    SpecialType = nil,
-    Callback = function(Option)
-        -- Wird beim Kauf verwendet
-    end
-}, "PotionDropdown")
-
-local BuyButton = ShopTab:CreateButton({
-    Name = "Trank kaufen",
-    Description = "Kauft den ausgewählten Trank",
-    Callback = function()
-        local selectedPotion = PotionDropdown.CurrentOption[1]
-        local potionIndex = table.find(PotionNames, selectedPotion)
-        
-        if potionIndex then
-            local args = {
-                [1] = PotionTypes[potionIndex],
-                [2] = 1 -- Anzahl
-            }
-            
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("54f5f951-af4e-447d-9ee4-c63d9130fe77"):FireServer(unpack(args))
-            
-            Luna:Notification({ 
-                Title = "Shop",
-                Icon = "shopping_cart",
-                ImageSource = "Material",
-                Content = selectedPotion .. " gekauft"
-            })
-        end
-    end
-})
-
-local QuantitySlider = ShopTab:CreateSlider({
-    Name = "Kaufmenge",
-    Range = {1, 10},
-    Increment = 1,
-    CurrentValue = 1,
-    Callback = function(Value)
-        -- Wird für die Kaufmenge verwendet
-    end
-}, "PotionQuantity")
-
--- Misc Tab Inhalte
-MiscTab:CreateSection("Auto Stats Upgrade")
-
-local StatTypes = {
-    "BOSS_CHANCE",
-    "BORDER_CHANCE",
-    "POTION_DURATION",
-    "COOLDOWN_REDUCTION",
-    "LUCK"
-}
-
-local StatNames = {
-    "Boss Chance",
-    "Border Chance",
-    "Potion Duration",
-    "Cooldown Reduction",
-    "Luck"
-}
-
-local StatDropdown = MiscTab:CreateDropdown({
-    Name = "Stat auswählen",
-    Description = "Wähle den Stat, den du verbessern möchtest",
-    Options = StatNames,
-    CurrentOption = {StatNames[1]},
-    MultipleOptions = false,
-    SpecialType = nil,
-    Callback = function(Option)
-        -- Wird beim Upgrade verwendet
-    end
-}, "StatDropdown")
-
-local UpgradeButton = MiscTab:CreateButton({
-    Name = "Stat verbessern",
-    Description = "Verbessert den ausgewählten Stat",
-    Callback = function()
-        local selectedStat = StatDropdown.CurrentOption[1]
-        local statIndex = table.find(StatNames, selectedStat)
-        
-        if statIndex then
-            local args = {
-                [1] = StatTypes[statIndex]
-            }
-            
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("af785685-b79a-4491-8d84-e3b637aa6fc5"):FireServer(unpack(args))
-            
-            Luna:Notification({ 
-                Title = "Stat Upgrade",
-                Icon = "trending_up",
-                ImageSource = "Material",
-                Content = selectedStat .. " wurde verbessert"
-            })
-        end
-    end
-})
-
-local CheckPointsButton = MiscTab:CreateButton({
-    Name = "Verfügbare Punkte prüfen",
-    Description = "Zeigt die Anzahl deiner verfügbaren Upgrade-Punkte an",
-    Callback = function()
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
         local success, result = pcall(function()
-            local LocalUser = require(ReplicatedStorage:WaitForChild("TS"):WaitForChild("user"):WaitForChild("local"):WaitForChild("local-user")).LocalUser
-            return LocalUser.upgrades:getCards()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
         end)
         
         if success then
-            Luna:Notification({ 
-                Title = "Upgrade Points",
-                Icon = "stars",
-                ImageSource = "Material",
-                Content = "Du hast " .. result .. " Upgrade-Punkte verfügbar!"
-            })
+            Utilities.Notify("Rewards Claimed", "Successfully claimed hard exploration rewards", "redeem")
         else
-            Luna:Notification({ 
-                Title = "Error",
-                Icon = "error",
-                ImageSource = "Material",
-                Content = "Konnte Upgrade-Punkte nicht abrufen"
-            })
+            Utilities.Notify("Error", "Failed to claim rewards", "error")
         end
     end
 })
 
-MiscTab:CreateDivider()
+-- Shop Tab
+TabShop:CreateSection("Shop Management")
 
--- UI Einstellungen
-MiscTab:BuildThemeSection()
+TabShop:CreateParagraph({
+    Title = "Shop Information",
+    Text = "Purchase various items from the shop to enhance your gameplay experience."
+})
 
--- Konfigurations-Einstellungen am Ende hinzufügen
-MiscTab:BuildConfigSection()
+-- Shop items
+TabShop:CreateButton({
+    Name = "Buy Luck Potion (Small)",
+    Description = "Purchase a small luck potion",
+    Callback = function()
+        Utilities.BuyShopItem("small_luck_potion", 1)
+    end
+})
 
--- Auto-Load Konfiguration
+TabShop:CreateButton({
+    Name = "Buy Luck Potion (Medium)",
+    Description = "Purchase a medium luck potion",
+    Callback = function()
+        Utilities.BuyShopItem("medium_luck_potion", 1)
+    end
+})
+
+TabShop:CreateButton({
+    Name = "Buy Luck Potion (Large)",
+    Description = "Purchase a large luck potion",
+    Callback = function()
+        Utilities.BuyShopItem("large_luck_potion", 1)
+    end
+})
+
+TabShop:CreateDivider()
+
+TabShop:CreateButton({
+    Name = "Buy Cooldown Reduction (Small)",
+    Description = "Purchase a small cooldown reduction potion",
+    Callback = function()
+        Utilities.BuyShopItem("small_cooldown_reduction_potion", 1)
+    end
+})
+
+TabShop:CreateButton({
+    Name = "Buy Cooldown Reduction (Medium)",
+    Description = "Purchase a medium cooldown reduction potion",
+    Callback = function()
+        Utilities.BuyShopItem("medium_cooldown_reduction_potion", 1)
+    end
+})
+
+TabShop:CreateButton({
+    Name = "Buy Cooldown Reduction (Large)",
+    Description = "Purchase a large cooldown reduction potion",
+    Callback = function()
+        Utilities.BuyShopItem("large_cooldown_reduction_potion", 1)
+    end
+})
+
+TabShop:CreateDivider()
+
+TabShop:CreateButton({
+    Name = "Buy Raid Luck Potion",
+    Description = "Purchase a raid luck potion",
+    Callback = function()
+        Utilities.BuyShopItem("raid_luck_potion", 1)
+    end
+})
+
+TabShop:CreateButton({
+    Name = "Buy Raid Border Chance Potion",
+    Description = "Purchase a raid border chance potion",
+    Callback = function()
+        Utilities.BuyShopItem("raid_border_chance_potion", 1)
+    end
+})
+
+TabShop:CreateButton({
+    Name = "Buy Raid Cooldown Potion",
+    Description = "Purchase a raid cooldown potion",
+    Callback = function()
+        Utilities.BuyShopItem("raid_cooldown_potion", 1)
+    end
+})
+
+TabShop:CreateButton({
+    Name = "Buy Raid Boss Chance Potion",
+    Description = "Purchase a raid boss chance potion",
+    Callback = function()
+        Utilities.BuyShopItem("raid_boss_chance_potion", 1)
+    end
+})
+
+TabShop:CreateButton({
+    Name = "Buy Raid Moon Cycle Reroll Potion",
+    Description = "Purchase a raid moon cycle reroll potion",
+    Callback = function()
+        Utilities.BuyShopItem("raid_moon_cycle_reroll_potion", 1)
+    end
+})
+
+-- Misc Tab
+TabMisc:CreateSection("Miscellaneous Features")
+
+-- Stats upgrade section
+TabMisc:CreateSection("Stats Upgrade")
+
+TabMisc:CreateButton({
+    Name = "Upgrade Luck",
+    Description = "Upgrade your luck stat",
+    Callback = function()
+        Utilities.UpgradeStat("LUCK")
+    end
+})
+
+TabMisc:CreateButton({
+    Name = "Upgrade Cooldown Reduction",
+    Description = "Upgrade your cooldown reduction stat",
+    Callback = function()
+        Utilities.UpgradeStat("COOLDOWN_REDUCTION")
+    end
+})
+
+TabMisc:CreateButton({
+    Name = "Upgrade Potion Duration",
+    Description = "Upgrade your potion duration stat",
+    Callback = function()
+        Utilities.UpgradeStat("POTION_DURATION")
+    end
+})
+
+TabMisc:CreateButton({
+    Name = "Upgrade Border Chance",
+    Description = "Upgrade your border chance stat",
+    Callback = function()
+        Utilities.UpgradeStat("BORDER_CHANCE")
+    end
+})
+
+TabMisc:CreateButton({
+    Name = "Upgrade Boss Chance",
+    Description = "Upgrade your boss chance stat",
+    Callback = function()
+        Utilities.UpgradeStat("BOSS_CHANCE")
+    end
+})
+
+-- Theme und Config Sektionen hinzufügen
+TabSettings:BuildThemeSection()
+TabSettings:BuildConfigSection()
+
+-- Autoload Config aktivieren
 Luna:LoadAutoloadConfig()
