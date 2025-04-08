@@ -197,13 +197,49 @@ Utilities.DismissBattleEnd = function()
     end
 end
 
+-- AutoFarm Configuration
+local AutoFarmConfig = {
+    Enabled = false,
+    CurrentWorld = "Ninja Village",
+    CurrentEnemy = "unstoppable_fist",
+    AutoCollect = false,
+    AutoMerge = false,
+    AutoFarmAllWorldBosses = false,
+    AutoFarmAllEnemiesInSelectedWorlds = false,
+    SelectedWorlds = {"Ninja Village"},
+    SelectedEnemies = {"unstoppable_fist"},
+    WorldBosses = {
+        "bijuu_beast",           -- Naruto Rage Mode
+        "awakened_galactic_tyrant", -- Frieza
+        "king_of_curses",        -- Sukuna
+        "combat_giant",          -- Eren
+        "awakened_pale_demon_lord", -- Muzan
+        "soul_queen",            -- Big Mom
+        "awakened_shadow_monarch"  -- Sung Jinwoo
+    },
+    Interval = 10 * 60, -- 10 minutes cooldown
+    Connections = {},
+    EnemyCooldowns = {} -- Stellen wir sicher, dass dies als leeres Table initialisiert wird
+}
+
+-- Funktion, um sicherzustellen, dass EnemyCooldowns existiert
+Utilities.EnsureEnemyCooldownsInitialized = function()
+    if not AutoFarmConfig.EnemyCooldowns then
+        Utilities.DebugPrint("EnemyCooldowns was nil, initializing as empty table")
+        AutoFarmConfig.EnemyCooldowns = {}
+    end
+end
+
 -- Function to handle battle flow and start next battle
 Utilities.StartNextBattle = function(enemyName)
     Utilities.DebugPrint("StartNextBattle called for enemy: " .. tostring(enemyName))
     
+    -- Stellen wir sicher, dass EnemyCooldowns existiert
+    Utilities.EnsureEnemyCooldownsInitialized()
+    
     -- Check if enemy is on cooldown
     local currentTime = os.time()
-    if AutoFarmConfig.EnemyCooldowns[enemyName] and AutoFarmConfig.EnemyCooldowns[enemyName] > currentTime then
+    if enemyName and AutoFarmConfig.EnemyCooldowns[enemyName] and AutoFarmConfig.EnemyCooldowns[enemyName] > currentTime then
         local remainingCooldown = math.ceil(AutoFarmConfig.EnemyCooldowns[enemyName] - currentTime)
         Utilities.DebugPrint("Enemy " .. enemyName .. " is still on cooldown for " .. remainingCooldown .. " seconds")
         return false
@@ -239,7 +275,9 @@ Utilities.StartNextBattle = function(enemyName)
             else
                 -- If we didn't enter battle but summoned successfully, the enemy might be on cooldown
                 Utilities.DebugPrint("Summoned enemy but didn't enter battle, setting cooldown for " .. enemyName)
-                AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + AutoFarmConfig.Interval
+                if enemyName then
+                    AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + AutoFarmConfig.Interval
+                end
                 return false
             end
         else
@@ -255,36 +293,19 @@ end
 
 -- Function to mark an enemy as defeated (sets its cooldown)
 Utilities.MarkEnemyDefeated = function(enemyName)
+    -- Stellen wir sicher, dass EnemyCooldowns existiert
+    Utilities.EnsureEnemyCooldownsInitialized()
+    
+    if not enemyName then
+        Utilities.DebugPrint("Cannot mark nil enemy as defeated")
+        return
+    end
+    
     Utilities.DebugPrint("Marking enemy as defeated: " .. tostring(enemyName))
     -- Set cooldown to exactly 10 minutes (600 seconds)
     AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + 600
     Utilities.DebugPrint("Enemy " .. enemyName .. " will be available again in 10 minutes (at " .. os.date("%H:%M:%S", AutoFarmConfig.EnemyCooldowns[enemyName]) .. ")")
 end
-
--- AutoFarm Configuration
-local AutoFarmConfig = {
-    Enabled = false,
-    CurrentWorld = "Ninja Village",
-    CurrentEnemy = "unstoppable_fist",
-    AutoCollect = false,
-    AutoMerge = false,
-    AutoFarmAllWorldBosses = false,
-    AutoFarmAllEnemiesInSelectedWorlds = false,
-    SelectedWorlds = {"Ninja Village"},
-    SelectedEnemies = {"unstoppable_fist"},
-    WorldBosses = {
-        "bijuu_beast",           -- Naruto Rage Mode
-        "awakened_galactic_tyrant", -- Frieza
-        "king_of_curses",        -- Sukuna
-        "combat_giant",          -- Eren
-        "awakened_pale_demon_lord", -- Muzan
-        "soul_queen",            -- Big Mom
-        "awakened_shadow_monarch"  -- Sung Jinwoo
-    },
-    Interval = 10 * 60, -- 10 minutes cooldown
-    Connections = {},
-    EnemyCooldowns = {}
-}
 
 -- Enemy display names mapping
 local EnemyDisplayNames = {
@@ -847,11 +868,14 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
                 while AutoFarmConfig.Enabled do
                     Utilities.DebugPrint("Auto Farm loop iteration for enemy: " .. tostring(AutoFarmConfig.CurrentEnemy))
                     
+                    -- Stellen wir sicher, dass EnemyCooldowns existiert
+                    Utilities.EnsureEnemyCooldownsInitialized()
+                    
                     -- Check if we can start a battle (not in battle, not at battle end, and enemy not on cooldown)
                     if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
                         -- Check if enemy is on cooldown
                         local currentTime = os.time()
-                        if AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] and AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] > currentTime then
+                        if AutoFarmConfig.CurrentEnemy and AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] and AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] > currentTime then
                             local remainingCooldown = math.ceil(AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] - currentTime)
                             Utilities.DebugPrint("Current enemy still on cooldown for " .. remainingCooldown .. " seconds")
                         else
@@ -866,7 +890,7 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
                         Utilities.DismissBattleEnd()
                         
                         -- Once battle is dismissed, mark the enemy as defeated
-                        if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
+                        if AutoFarmConfig.CurrentEnemy and not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
                             Utilities.MarkEnemyDefeated(AutoFarmConfig.CurrentEnemy)
                         end
                     end
