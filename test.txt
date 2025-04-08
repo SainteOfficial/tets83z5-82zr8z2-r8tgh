@@ -1,14 +1,14 @@
 -- Luna Interface Suite laden
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
--- Fenster erstellen
+-- Fenster erstellen mit besserem Branding
 local Window = Luna:CreateWindow({
     Name = "Anime Card Clash - MythHub", 
-    Subtitle = "v1.0",
-    LogoID = nil, 
+    Subtitle = "Premium", -- Fügt "Premium" als Untertitel hinzu
+    LogoID = nil,  
     LoadingEnabled = true,
-    LoadingTitle = "Loading...",
-    LoadingSubtitle = "MythHub preparing...",
+    LoadingTitle = "MythHub",
+    LoadingSubtitle = "Premium Anime Card Clash Experience",
     
     ConfigSettings = {
         ConfigFolder = "MythHub_AnimeCardClash"
@@ -20,16 +20,19 @@ local Window = Luna:CreateWindow({
 -- ###################### DASHBOARD TAB ######################
 local DashboardTab = Window:CreateTab({
     Name = "📊 Dashboard",
-    Icon = "home", -- Material Icon ohne Leerzeichen
-    ImageSource = "Material", -- "Material" statt "Lucide"
+    Icon = "dashboard", -- Korrektes Material-Icon für Dashboard
+    ImageSource = "Material",
     ShowTitle = true
 })
 
--- Welcome paragraph
+-- MythHub Logo oder Beschreibung
 DashboardTab:CreateParagraph({
-    Title = "Welcome to MythHub", 
-    Text = "This hub provides enhanced features for Anime Card Clash. Select any tab to get started."
+    Title = "Welcome to MythHub Premium", 
+    Text = "The ultimate script hub for Anime Card Clash. Developed by professional exploiters to maximize your gaming experience."
 })
+
+-- Status Panel
+DashboardTab:CreateSection("Status Information")
 
 -- Status labels
 local autoFarmStatusLabel = DashboardTab:CreateLabel({
@@ -42,16 +45,45 @@ local autoTowerStatusLabel = DashboardTab:CreateLabel({
     Style = 1
 })
 
--- News & Updates
+-- Discord Button für Werbung
+DashboardTab:CreateSection("Community")
+
+DashboardTab:CreateButton({
+    Name = "Join Discord Community",
+    Description = "Get access to exclusive scripts, updates and support!",
+    Callback = function()
+        -- Discord Einladung öffnen (füge deinen eigenen Link ein)
+        Luna:Notification({ 
+            Title = "Discord Invite",
+            Icon = "link",
+            ImageSource = "Material",
+            Content = "Join our Discord server for premium scripts and support! Link copied to clipboard."
+        })
+        
+        setclipboard("https://discord.gg/mythhub") -- Ersetze mit deinem tatsächlichen Discord-Link
+    end
+})
+
+-- MythHub Werbebereich
+DashboardTab:CreateSection("MythHub Premium")
+
 DashboardTab:CreateParagraph({
-    Title = "News & Updates", 
+    Title = "Why Choose MythHub?", 
+    Text = "✅ Regular updates\n✅ 24/7 support in our Discord\n✅ Anti-detection features\n✅ Exclusive features not found elsewhere\n✅ Clean, professional interface"
+})
+
+-- News & Updates
+DashboardTab:CreateSection("News & Updates")
+
+DashboardTab:CreateParagraph({
+    Title = "Latest Update", 
     Text = "Version 1.0 released! New features coming soon."
 })
 
 -- ###################### AUTOFARM TAB ######################
 local AutoFarmTab = Window:CreateTab({
     Name = "⚔️ AutoFarm",
-    Icon = "flash_on", -- Material Icon ohne Leerzeichen
+    Icon = "bolt",
     ImageSource = "Material",
     ShowTitle = true
 })
@@ -177,7 +209,7 @@ local killLogParagraph = AutoFarmTab:CreateParagraph({
 -- ###################### TOWERS TAB ######################
 local TowersTab = Window:CreateTab({
     Name = "🗼 Towers",
-    Icon = "apartment", -- Material Icon ohne Leerzeichen
+    Icon = "apartment",
     ImageSource = "Material",
     ShowTitle = true
 })
@@ -307,7 +339,7 @@ local autoStartToggle = TowersTab:CreateToggle({
 -- ###################### RAIDS TAB ######################
 local RaidsTab = Window:CreateTab({
     Name = "🚧 Raids",
-    Icon = "groups", -- Material Icon ohne Leerzeichen
+    Icon = "groups",
     ImageSource = "Material",
     ShowTitle = true
 })
@@ -321,7 +353,7 @@ RaidsTab:CreateParagraph({
 -- ###################### EXPLORATION TAB ######################
 local ExplorationTab = Window:CreateTab({
     Name = "🌍 Exploration",
-    Icon = "explore", -- Material Icon ohne Leerzeichen
+    Icon = "explore",
     ImageSource = "Material",
     ShowTitle = true
 })
@@ -354,7 +386,7 @@ local tweenToItemToggle = ExplorationTab:CreateToggle({
 -- ###################### SHOP TAB ######################
 local ShopTab = Window:CreateTab({
     Name = "🛒 Shop",
-    Icon = "shopping_cart", -- Material Icon ohne Leerzeichen
+    Icon = "shopping_cart",
     ImageSource = "Material",
     ShowTitle = true
 })
@@ -368,7 +400,7 @@ ShopTab:CreateParagraph({
 -- ###################### MISC TAB ######################
 local MiscTab = Window:CreateTab({
     Name = "🛠️ Misc",
-    Icon = "build", -- Material Icon ohne Leerzeichen
+    Icon = "build",
     ImageSource = "Material",
     ShowTitle = true
 })
@@ -448,7 +480,7 @@ local enemyCooldownsParagraph = MiscTab:CreateParagraph({
 -- ###################### SETTINGS TAB ######################
 local SettingsTab = Window:CreateTab({
     Name = "⚙️ Settings",
-    Icon = "settings", -- Material Icon ohne Leerzeichen
+    Icon = "settings",
     ImageSource = "Material",
     ShowTitle = true
 })
