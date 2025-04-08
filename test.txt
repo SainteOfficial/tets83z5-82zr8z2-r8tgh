@@ -1,12 +1,5 @@
 -- Luna Interface Suite laden
-local success, Luna = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
-end)
-
-if not success then
-    warn("Luna Interface Suite konnte nicht geladen werden!")
-    return
-end
+local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
 -- Fenster erstellen
 local Window = Luna:CreateWindow({
@@ -24,18 +17,18 @@ local Window = Luna:CreateWindow({
     KeySystem = false
 })
 
--- Universal Tab erstellen (mit pcall für Fehlerbehandlung)
+-- Tab 1: Universal erstellen - mit einfachem Icon
 local UniversalTab = Window:CreateTab({
     Name = "Universal",
-    Icon = "globe",
-    ImageSource = "Material",
+    Icon = "home", -- Einfaches Icon ohne Leerzeichen
+    ImageSource = "Material", -- Material als Quelle angeben
     ShowTitle = true
 })
 
--- Tab-Inhaltstest
+-- Paragraph zum Testen hinzufügen
 UniversalTab:CreateParagraph({
-    Title = "Tab Test", 
-    Text = "Wenn du diesen Text siehst, funktionieren die Tabs korrekt!"
+    Title = "Willkommen", 
+    Text = "Dies ist ein einfaches Script Hub mit zwei Tabs"
 })
 
 -- Geschwindigkeit & Sprung Sektion
@@ -47,29 +40,59 @@ UniversalTab:CreateToggle({
     Description = "Erhöht deine Laufgeschwindigkeit",
     CurrentValue = false,
     Callback = function(Value)
-        pcall(function()
-            if Value then
-                game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 50
-            else
-                game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
-            end
-        end)
+        if Value then
+            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 50
+        else
+            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
     end
 }, "WalkSpeedToggle")
 
--- Einstellungen Tab
+-- JumpPower Toggle
+UniversalTab:CreateToggle({
+    Name = "Höher Springen",
+    Description = "Erhöht deine Sprunghöhe",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            game.Players.LocalPlayer.Character.Humanoid.JumpPower = 100
+        else
+            game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50
+        end
+    end
+}, "JumpPowerToggle")
+
+-- Tab 2: Einstellungen
 local SettingsTab = Window:CreateTab({
     Name = "Einstellungen",
-    Icon = "settings",
-    ImageSource = "Material",
+    Icon = "settings", -- Einfaches Icon ohne Leerzeichen
+    ImageSource = "Material", -- Material als Quelle angeben
     ShowTitle = true
 })
 
--- Theming Sektion hinzufügen
-pcall(function() SettingsTab:BuildThemeSection() end)
+-- Text zur Bestätigung
+SettingsTab:CreateParagraph({
+    Title = "Einstellungen Tab", 
+    Text = "Hier kannst du verschiedene Einstellungen vornehmen"
+})
+
+-- UI-Keybind
+local UIBind = SettingsTab:CreateBind({
+    Name = "UI ein-/ausblenden",
+    Description = "Drücke diese Taste, um das UI ein-/auszublenden",
+    CurrentBind = "RightControl",
+    HoldToInteract = false,
+    Callback = function() end,
+    OnChangedCallback = function(Bind)
+        Window.Bind = Bind
+    end,
+}, "UIToggleKeybind")
+
+-- Theming-Sektion hinzufügen
+SettingsTab:BuildThemeSection()
 
 -- Konfigurationssektion hinzufügen
-pcall(function() SettingsTab:BuildConfigSection() end)
+SettingsTab:BuildConfigSection()
 
 -- WICHTIG: Automatische Konfiguration laden (muss am Ende sein!)
 Luna:LoadAutoloadConfig()
