@@ -109,62 +109,156 @@ Utilities.GetUpgradePoints = function()
     end
 end
 
--- Function to summon an enemy
-Utilities.SummonEnemy = function(enemyName)
-    local args = {
-        [1] = enemyName
-    }
-    
-    local success, result = pcall(function()
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+-- Function to print debug messages
+Utilities.DebugPrint = function(message)
+    print("[MythHub Debug] " .. message)
+    -- Also add to console GUI if available
+    pcall(function()
+        if game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.PlayerGui and game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("MythHubConsole") then
+            local console = game:GetService("Players").LocalPlayer.PlayerGui.MythHubConsole
+            if console and console:FindFirstChild("Console") and console.Console:FindFirstChild("Text") then
+                console.Console.Text.Text = console.Console.Text.Text .. "\n" .. message
+            end
+        end
     end)
+end
+
+-- Function to check if player is in battle
+Utilities.IsInBattle = function()
+    local localPlayer = Utilities.GetLocalPlayer()
+    if localPlayer and localPlayer.PlayerGui then
+        local hasBattleGui = localPlayer.PlayerGui:FindFirstChild("battle") ~= nil
+        Utilities.DebugPrint("Battle GUI check: " .. tostring(hasBattleGui))
+        return hasBattleGui
+    end
+    Utilities.DebugPrint("Battle GUI check failed - player or GUI not found")
+    return false
+end
+
+-- Function to check if battle just ended
+Utilities.IsBattleEnded = function()
+    local localPlayer = Utilities.GetLocalPlayer()
+    if localPlayer and localPlayer.PlayerGui then
+        local hasBattleEndGui = localPlayer.PlayerGui:FindFirstChild("battle-end") ~= nil
+        Utilities.DebugPrint("Battle-End GUI check: " .. tostring(hasBattleEndGui))
+        return hasBattleEndGui
+    end
+    Utilities.DebugPrint("Battle-End GUI check failed - player or GUI not found")
+    return false
+end
+
+-- Function to simulate mouse clicks (M1)
+Utilities.ClickM1 = function(times)
+    times = times or 10 -- Default to 10 clicks
     
-    if success then
-        Utilities.Notify("Enemy Summoned", "Successfully summoned " .. enemyName, "check_circle")
-        return true
+    Utilities.DebugPrint("Attempting to send " .. times .. " M1 clicks")
+    pcall(function()
+        for i = 1, times do
+            Utilities.DebugPrint("Sending M1 click " .. i .. "/" .. times)
+            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, true, game, 1)
+            wait(0.1)
+            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, false, game, 1)
+            wait(0.1)
+        end
+    end)
+    Utilities.DebugPrint("Finished sending M1 clicks")
+end
+
+-- Function to dismiss battle end screen
+Utilities.DismissBattleEnd = function()
+    Utilities.DebugPrint("DismissBattleEnd function called")
+    if Utilities.IsBattleEnded() then
+        Utilities.DebugPrint("Battle-End detected, waiting 3 seconds before clicking")
+        wait(3)
+        
+        -- Click M1 repeatedly until battle-end GUI is gone
+        local maxAttempts = 30 -- Maximum attempts to prevent infinite loop
+        local attempts = 0
+        
+        Utilities.DebugPrint("Starting to click M1 to dismiss Battle-End")
+        while Utilities.IsBattleEnded() and attempts < maxAttempts do
+            Utilities.DebugPrint("Click attempt " .. attempts+1 .. "/" .. maxAttempts)
+            Utilities.ClickM1(5) -- Try 5 clicks each iteration
+            wait(0.5)
+            attempts = attempts + 1
+        end
+        
+        if attempts >= maxAttempts then
+            Utilities.DebugPrint("WARNING: Failed to dismiss Battle-End after " .. maxAttempts .. " attempts")
+        else
+            Utilities.DebugPrint("Successfully dismissed Battle-End GUI after " .. attempts .. " attempts")
+        end
+        
+        -- Wait a bit more to ensure everything is properly dismissed
+        Utilities.DebugPrint("Waiting 1 second extra to ensure dismissal is complete")
+        wait(1)
     else
-        Utilities.Notify("Error", "Failed to summon enemy: " .. enemyName, "error")
-        return false
+        Utilities.DebugPrint("No Battle-End GUI detected, nothing to dismiss")
     end
 end
 
--- Function to buy shop items
-Utilities.BuyShopItem = function(itemName, quantity)
-    local args = {
-        [1] = itemName,
-        [2] = quantity or 1
-    }
+-- Function to handle battle flow and start next battle
+Utilities.StartNextBattle = function(enemyName)
+    Utilities.DebugPrint("StartNextBattle called for enemy: " .. tostring(enemyName))
     
-    local success, result = pcall(function()
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("54f5f951-af4e-447d-9ee4-c63d9130fe77"):FireServer(unpack(args))
-    end)
-    
-    if success then
-        Utilities.Notify("Item Purchased", "Successfully bought " .. quantity .. "x " .. itemName, "shopping_cart")
-        return true
-    else
-        Utilities.Notify("Error", "Failed to purchase item: " .. itemName, "error")
+    -- Check if enemy is on cooldown
+    local currentTime = os.time()
+    if AutoFarmConfig.EnemyCooldowns[enemyName] and AutoFarmConfig.EnemyCooldowns[enemyName] > currentTime then
+        local remainingCooldown = math.ceil(AutoFarmConfig.EnemyCooldowns[enemyName] - currentTime)
+        Utilities.DebugPrint("Enemy " .. enemyName .. " is still on cooldown for " .. remainingCooldown .. " seconds")
         return false
     end
+    
+    -- First check if we're in a battle
+    if Utilities.IsInBattle() then
+        Utilities.DebugPrint("Already in battle, cannot start new battle")
+        return false -- Already in battle, can't start a new one
+    end
+    
+    -- Check if we need to dismiss a battle end screen
+    if Utilities.IsBattleEnded() then
+        Utilities.DebugPrint("Battle-End screen detected, attempting to dismiss")
+        Utilities.DismissBattleEnd()
+        return false
+    end
+    
+    -- Now try to summon the enemy if not in battle and no battle end screen
+    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+        Utilities.DebugPrint("No battle or battle-end detected, attempting to summon: " .. tostring(enemyName))
+        local success = Utilities.SummonEnemy(enemyName)
+        
+        if success then
+            Utilities.DebugPrint("Summon attempt successful, waiting 2 seconds for battle to start")
+            -- Wait 2 seconds to allow battle to start properly
+            wait(2)
+            
+            -- Check if we successfully entered battle
+            if Utilities.IsInBattle() then
+                Utilities.DebugPrint("Successfully entered battle with " .. enemyName)
+                return true
+            else
+                -- If we didn't enter battle but summoned successfully, the enemy might be on cooldown
+                Utilities.DebugPrint("Summoned enemy but didn't enter battle, setting cooldown for " .. enemyName)
+                AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + AutoFarmConfig.Interval
+                return false
+            end
+        else
+            Utilities.DebugPrint("Summon attempt failed for: " .. tostring(enemyName))
+        end
+        
+        return success
+    end
+    
+    Utilities.DebugPrint("Failed to start battle - either still in battle or battle-end state")
+    return false
 end
 
--- Function to upgrade stats
-Utilities.UpgradeStat = function(statName)
-    local args = {
-        [1] = statName
-    }
-    
-    local success, result = pcall(function()
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("af785685-b79a-4491-8d84-e3b637aa6fc5"):FireServer(unpack(args))
-    end)
-    
-    if success then
-        Utilities.Notify("Stat Upgraded", "Successfully upgraded " .. statName, "trending_up")
-        return true
-    else
-        Utilities.Notify("Error", "Failed to upgrade stat: " .. statName, "error")
-        return false
-    end
+-- Function to mark an enemy as defeated (sets its cooldown)
+Utilities.MarkEnemyDefeated = function(enemyName)
+    Utilities.DebugPrint("Marking enemy as defeated: " .. tostring(enemyName))
+    -- Set cooldown to exactly 10 minutes (600 seconds)
+    AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + 600
+    Utilities.DebugPrint("Enemy " .. enemyName .. " will be available again in 10 minutes (at " .. os.date("%H:%M:%S", AutoFarmConfig.EnemyCooldowns[enemyName]) .. ")")
 end
 
 -- AutoFarm Configuration
@@ -188,7 +282,8 @@ local AutoFarmConfig = {
         "awakened_shadow_monarch"  -- Sung Jinwoo
     },
     Interval = 10 * 60, -- 10 minutes cooldown
-    Connections = {}
+    Connections = {},
+    EnemyCooldowns = {}
 }
 
 -- Enemy display names mapping
@@ -518,57 +613,96 @@ local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
         
         if Value then
             -- Start auto farm all bosses
+            Utilities.DebugPrint("Auto Farm All World Bosses toggle activated")
             Utilities.Notify("Auto Farm", "Started auto farming all world bosses", "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarmAllBosses then
+                Utilities.DebugPrint("Disconnecting previous Auto Farm All Bosses connection")
                 AutoFarmConfig.Connections.AutoFarmAllBosses:Disconnect()
             end
             
             -- Create new auto farm loop
+            Utilities.DebugPrint("Starting Auto Farm All Bosses loop for " .. #AutoFarmConfig.WorldBosses .. " bosses")
             AutoFarmConfig.Connections.AutoFarmAllBosses = spawn(function()
                 local currentBossIndex = 1
+                local currentBoss = AutoFarmConfig.WorldBosses[currentBossIndex] or "bijuu_beast"
                 
                 while AutoFarmConfig.AutoFarmAllWorldBosses do
-                    local bossCode = AutoFarmConfig.WorldBosses[currentBossIndex]
-                    
-                    -- Try to start battle with current boss
-                    local battleStarted = Utilities.StartNextBattle(bossCode)
-                    
-                    -- If battle started, we need to wait for it to end
-                    if battleStarted then
-                        -- Wait until battle is over and properly dismissed
-                        while Utilities.IsInBattle() or Utilities.IsBattleEnded() do
-                            wait(1)
+                    -- Check if we need to update the current boss (for bosses not on cooldown)
+                    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+                        -- Try to find a boss that's not on cooldown
+                        local allOnCooldown = true
+                        local startingIndex = currentBossIndex
+                        
+                        for i = 1, #AutoFarmConfig.WorldBosses do
+                            -- Calculate the next boss index with wrap-around
+                            local nextIndex = (startingIndex + i - 1) % #AutoFarmConfig.WorldBosses + 1
+                            local nextBoss = AutoFarmConfig.WorldBosses[nextIndex]
                             
-                            -- Automatically dismiss battle end screen if visible
-                            if Utilities.IsBattleEnded() then
-                                Utilities.DismissBattleEnd()
+                            -- Check if this boss is on cooldown
+                            local currentTime = os.time()
+                            if not AutoFarmConfig.EnemyCooldowns[nextBoss] or AutoFarmConfig.EnemyCooldowns[nextBoss] <= currentTime then
+                                currentBossIndex = nextIndex
+                                currentBoss = nextBoss
+                                allOnCooldown = false
+                                break
                             end
                         end
                         
-                        -- Battle completed, move to next boss and wait for cooldown
-                        Utilities.Notify("Auto Farm", "Boss battle completed, moving to next boss after cooldown", "timer")
-                        
-                        -- Increment boss index
-                        currentBossIndex = currentBossIndex + 1
-                        if currentBossIndex > #AutoFarmConfig.WorldBosses then
-                            currentBossIndex = 1
+                        if allOnCooldown then
+                            -- All bosses are on cooldown, find the one with the shortest remaining cooldown
+                            local shortestCooldown = math.huge
+                            local shortestIndex = 1
+                            
+                            for i = 1, #AutoFarmConfig.WorldBosses do
+                                local boss = AutoFarmConfig.WorldBosses[i]
+                                local remainingCooldown = (AutoFarmConfig.EnemyCooldowns[boss] or 0) - currentTime
+                                
+                                if remainingCooldown < shortestCooldown then
+                                    shortestCooldown = remainingCooldown
+                                    shortestIndex = i
+                                end
+                            end
+                            
+                            currentBossIndex = shortestIndex
+                            currentBoss = AutoFarmConfig.WorldBosses[currentBossIndex]
+                            
+                            Utilities.DebugPrint("All bosses on cooldown. Waiting for " .. currentBoss .. " (shortest cooldown: " .. math.max(0, shortestCooldown) .. " seconds)")
+                            wait(math.min(5, math.max(1, shortestCooldown))) -- Wait at least 1 second, at most 5 seconds
+                        else
+                            -- Try to start battle with current boss (which is not on cooldown)
+                            Utilities.DebugPrint("Attempting to start battle with boss: " .. tostring(currentBoss))
+                            Utilities.StartNextBattle(currentBoss)
                         end
+                    elseif Utilities.IsInBattle() then
+                        Utilities.DebugPrint("Currently in boss battle with " .. currentBoss .. ", waiting...")
+                    elseif Utilities.IsBattleEnded() then
+                        Utilities.DebugPrint("Boss battle ended with " .. currentBoss .. ", dismissing end screen")
+                        Utilities.DismissBattleEnd()
                         
-                        wait(AutoFarmConfig.Interval) -- Wait for cooldown
-                    else
-                        -- Failed to start battle or still in a battle/battle-end state, wait a bit and try again
-                        wait(5)
+                        -- Once battle is dismissed, mark the boss as defeated and move to next
+                        if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
+                            Utilities.MarkEnemyDefeated(currentBoss)
+                            
+                            -- Move to next boss for next iteration
+                            currentBossIndex = currentBossIndex % #AutoFarmConfig.WorldBosses + 1
+                            currentBoss = AutoFarmConfig.WorldBosses[currentBossIndex]
+                        end
                     end
+                    
+                    -- Wait 1 second before next check
+                    wait(1)
                 end
             end)
         else
             -- Stop auto farm all bosses
+            Utilities.DebugPrint("Auto Farm All World Bosses toggle deactivated")
             Utilities.Notify("Auto Farm", "Stopped auto farming all world bosses", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarmAllBosses then
+                Utilities.DebugPrint("Disconnecting Auto Farm All Bosses loop")
                 AutoFarmConfig.Connections.AutoFarmAllBosses:Disconnect()
                 AutoFarmConfig.Connections.AutoFarmAllBosses = nil
             end
@@ -586,61 +720,101 @@ local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
         
         if Value then
             -- Start auto farm all enemies
+            Utilities.DebugPrint("Auto Farm All Selected Enemies toggle activated")
             Utilities.Notify("Auto Farm", "Started auto farming all selected enemies", "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarmAllEnemies then
+                Utilities.DebugPrint("Disconnecting previous Auto Farm All Enemies connection")
                 AutoFarmConfig.Connections.AutoFarmAllEnemies:Disconnect()
             end
             
             -- Create new auto farm loop
+            Utilities.DebugPrint("Starting Auto Farm All Enemies loop for " .. #AutoFarmConfig.SelectedEnemies .. " enemies")
             AutoFarmConfig.Connections.AutoFarmAllEnemies = spawn(function()
                 local currentEnemyIndex = 1
+                local currentEnemy = AutoFarmConfig.SelectedEnemies[currentEnemyIndex] or "unstoppable_fist"
                 
                 while AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds do
                     if #AutoFarmConfig.SelectedEnemies > 0 then
-                        local enemyCode = AutoFarmConfig.SelectedEnemies[currentEnemyIndex]
-                        
-                        -- Try to start battle with current enemy
-                        local battleStarted = Utilities.StartNextBattle(enemyCode)
-                        
-                        -- If battle started, we need to wait for it to end
-                        if battleStarted then
-                            -- Wait until battle is over and properly dismissed
-                            while Utilities.IsInBattle() or Utilities.IsBattleEnded() do
-                                wait(1)
+                        -- Check if we can start a battle
+                        if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+                            -- Try to find an enemy that's not on cooldown
+                            local allOnCooldown = true
+                            local startingIndex = currentEnemyIndex
+                            
+                            for i = 1, #AutoFarmConfig.SelectedEnemies do
+                                -- Calculate the next enemy index with wrap-around
+                                local nextIndex = (startingIndex + i - 1) % #AutoFarmConfig.SelectedEnemies + 1
+                                local nextEnemy = AutoFarmConfig.SelectedEnemies[nextIndex]
                                 
-                                -- Automatically dismiss battle end screen if visible
-                                if Utilities.IsBattleEnded() then
-                                    Utilities.DismissBattleEnd()
+                                -- Check if this enemy is on cooldown
+                                local currentTime = os.time()
+                                if not AutoFarmConfig.EnemyCooldowns[nextEnemy] or AutoFarmConfig.EnemyCooldowns[nextEnemy] <= currentTime then
+                                    currentEnemyIndex = nextIndex
+                                    currentEnemy = nextEnemy
+                                    allOnCooldown = false
+                                    break
                                 end
                             end
                             
-                            -- Battle completed, move to next enemy and wait for cooldown
-                            Utilities.Notify("Auto Farm", "Battle completed, moving to next enemy after cooldown", "timer")
-                            
-                            -- Increment enemy index
-                            currentEnemyIndex = currentEnemyIndex + 1
-                            if currentEnemyIndex > #AutoFarmConfig.SelectedEnemies then
-                                currentEnemyIndex = 1
+                            if allOnCooldown then
+                                -- All enemies are on cooldown, find the one with the shortest remaining cooldown
+                                local shortestCooldown = math.huge
+                                local shortestIndex = 1
+                                
+                                for i = 1, #AutoFarmConfig.SelectedEnemies do
+                                    local enemy = AutoFarmConfig.SelectedEnemies[i]
+                                    local remainingCooldown = (AutoFarmConfig.EnemyCooldowns[enemy] or 0) - currentTime
+                                    
+                                    if remainingCooldown < shortestCooldown then
+                                        shortestCooldown = remainingCooldown
+                                        shortestIndex = i
+                                    end
+                                end
+                                
+                                currentEnemyIndex = shortestIndex
+                                currentEnemy = AutoFarmConfig.SelectedEnemies[currentEnemyIndex]
+                                
+                                Utilities.DebugPrint("All enemies on cooldown. Waiting for " .. currentEnemy .. " (shortest cooldown: " .. math.max(0, shortestCooldown) .. " seconds)")
+                                wait(math.min(5, math.max(1, shortestCooldown))) -- Wait at least 1 second, at most 5 seconds
+                            else
+                                -- Try to start battle with current enemy (which is not on cooldown)
+                                Utilities.DebugPrint("Attempting to start battle with: " .. tostring(currentEnemy))
+                                Utilities.StartNextBattle(currentEnemy)
                             end
+                        elseif Utilities.IsInBattle() then
+                            Utilities.DebugPrint("Currently in battle with " .. currentEnemy .. ", waiting...")
+                        elseif Utilities.IsBattleEnded() then
+                            Utilities.DebugPrint("Battle ended with " .. currentEnemy .. ", dismissing end screen")
+                            Utilities.DismissBattleEnd()
                             
-                            wait(AutoFarmConfig.Interval) -- Wait for cooldown
-                        else
-                            -- Failed to start battle or still in a battle/battle-end state, wait a bit and try again
-                            wait(5)
+                            -- Once battle is dismissed, mark the enemy as defeated and move to next
+                            if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
+                                Utilities.MarkEnemyDefeated(currentEnemy)
+                                
+                                -- Move to next enemy for next iteration
+                                currentEnemyIndex = currentEnemyIndex % #AutoFarmConfig.SelectedEnemies + 1
+                                currentEnemy = AutoFarmConfig.SelectedEnemies[currentEnemyIndex]
+                            end
                         end
                     else
+                        Utilities.DebugPrint("No enemies selected, waiting 5 seconds")
                         wait(5)
                     end
+                    
+                    -- Wait 1 second before next check
+                    wait(1)
                 end
             end)
         else
             -- Stop auto farm all enemies
+            Utilities.DebugPrint("Auto Farm All Selected Enemies toggle deactivated")
             Utilities.Notify("Auto Farm", "Stopped auto farming all selected enemies", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarmAllEnemies then
+                Utilities.DebugPrint("Disconnecting Auto Farm All Enemies loop")
                 AutoFarmConfig.Connections.AutoFarmAllEnemies:Disconnect()
                 AutoFarmConfig.Connections.AutoFarmAllEnemies = nil
             end
@@ -658,46 +832,57 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
         
         if Value then
             -- Start auto farm
+            Utilities.DebugPrint("Auto Farm toggle activated for enemy: " .. tostring(AutoFarmConfig.CurrentEnemy))
             Utilities.Notify("Auto Farm", "Started auto farming " .. AutoFarmConfig.CurrentEnemy .. " in " .. table.concat(AutoFarmConfig.SelectedWorlds, ", "), "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarm then
+                Utilities.DebugPrint("Disconnecting previous Auto Farm connection")
                 AutoFarmConfig.Connections.AutoFarm:Disconnect()
             end
             
             -- Create new auto farm loop
+            Utilities.DebugPrint("Starting Auto Farm loop")
             AutoFarmConfig.Connections.AutoFarm = spawn(function()
                 while AutoFarmConfig.Enabled do
-                    -- Try to start a battle with current enemy
-                    local battleStarted = Utilities.StartNextBattle(AutoFarmConfig.CurrentEnemy)
+                    Utilities.DebugPrint("Auto Farm loop iteration for enemy: " .. tostring(AutoFarmConfig.CurrentEnemy))
                     
-                    -- If battle started, we need to wait for it to end
-                    if battleStarted then
-                        -- Wait until battle is over and properly dismissed
-                        while Utilities.IsInBattle() or Utilities.IsBattleEnded() do
-                            wait(1)
-                            
-                            -- Automatically dismiss battle end screen if visible
-                            if Utilities.IsBattleEnded() then
-                                Utilities.DismissBattleEnd()
-                            end
+                    -- Check if we can start a battle (not in battle, not at battle end, and enemy not on cooldown)
+                    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+                        -- Check if enemy is on cooldown
+                        local currentTime = os.time()
+                        if AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] and AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] > currentTime then
+                            local remainingCooldown = math.ceil(AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] - currentTime)
+                            Utilities.DebugPrint("Current enemy still on cooldown for " .. remainingCooldown .. " seconds")
+                        else
+                            -- Try to start a battle with current enemy
+                            Utilities.DebugPrint("Attempting to start battle with: " .. tostring(AutoFarmConfig.CurrentEnemy))
+                            Utilities.StartNextBattle(AutoFarmConfig.CurrentEnemy)
                         end
+                    elseif Utilities.IsInBattle() then
+                        Utilities.DebugPrint("Currently in battle, waiting...")
+                    elseif Utilities.IsBattleEnded() then
+                        Utilities.DebugPrint("Battle ended, attempting to dismiss end screen")
+                        Utilities.DismissBattleEnd()
                         
-                        -- Battle completed, now wait for cooldown
-                        Utilities.Notify("Auto Farm", "Battle completed, waiting for cooldown", "timer")
-                        wait(AutoFarmConfig.Interval) -- Wait for cooldown
-                    else
-                        -- Failed to start battle or still in a battle/battle-end state, wait a bit and try again
-                        wait(5)
+                        -- Once battle is dismissed, mark the enemy as defeated
+                        if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
+                            Utilities.MarkEnemyDefeated(AutoFarmConfig.CurrentEnemy)
+                        end
                     end
+                    
+                    -- Wait 1 second before next check
+                    wait(1)
                 end
             end)
         else
             -- Stop auto farm
+            Utilities.DebugPrint("Auto Farm toggle deactivated")
             Utilities.Notify("Auto Farm", "Stopped auto farming", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarm then
+                Utilities.DebugPrint("Disconnecting Auto Farm loop")
                 AutoFarmConfig.Connections.AutoFarm:Disconnect()
                 AutoFarmConfig.Connections.AutoFarm = nil
             end
@@ -1529,75 +1714,152 @@ TabSettings:BuildConfigSection()
 -- Enable autoload config
 Luna:LoadAutoloadConfig()
 
--- Function to check if player is in battle
-Utilities.IsInBattle = function()
-    local localPlayer = Utilities.GetLocalPlayer()
-    if localPlayer and localPlayer.PlayerGui and localPlayer.PlayerGui:FindFirstChild("battle") then
-        return true
-    end
-    return false
-end
-
--- Function to check if battle just ended
-Utilities.IsBattleEnded = function()
-    local localPlayer = Utilities.GetLocalPlayer()
-    if localPlayer and localPlayer.PlayerGui and localPlayer.PlayerGui:FindFirstChild("battle-end") then
-        return true
-    end
-    return false
-end
-
--- Function to simulate mouse clicks (M1)
-Utilities.ClickM1 = function(times)
-    times = times or 10 -- Default to 10 clicks
+-- Add debug console to the game
+Utilities.CreateDebugConsole = function()
+    Utilities.DebugPrint("Attempting to create debug console GUI")
     
+    -- Check if console already exists
+    local player = Utilities.GetLocalPlayer()
+    if player and player.PlayerGui and player.PlayerGui:FindFirstChild("MythHubConsole") then
+        Utilities.DebugPrint("Debug console already exists, not creating a new one")
+        return
+    end
+    
+    -- Create console GUI
     pcall(function()
-        for i = 1, times do
-            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, true, game, 1)
-            wait(0.1)
-            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, false, game, 1)
-            wait(0.1)
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "MythHubConsole"
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screenGui.ResetOnSpawn = false
+        
+        local frame = Instance.new("Frame")
+        frame.Name = "ConsoleFrame"
+        frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        frame.BackgroundTransparency = 0.2
+        frame.BorderSizePixel = 0
+        frame.Position = UDim2.new(0, 10, 0, 10)
+        frame.Size = UDim2.new(0, 400, 0, 300)
+        frame.Parent = screenGui
+        
+        local title = Instance.new("TextLabel")
+        title.Name = "Title"
+        title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        title.BackgroundTransparency = 0.2
+        title.BorderSizePixel = 0
+        title.Size = UDim2.new(1, 0, 0, 30)
+        title.Font = Enum.Font.SourceSansBold
+        title.Text = "MythHub Debug Console"
+        title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        title.TextSize = 18
+        title.Parent = frame
+        
+        local closeButton = Instance.new("TextButton")
+        closeButton.Name = "CloseButton"
+        closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        closeButton.BorderSizePixel = 0
+        closeButton.Position = UDim2.new(1, -25, 0, 5)
+        closeButton.Size = UDim2.new(0, 20, 0, 20)
+        closeButton.Font = Enum.Font.SourceSansBold
+        closeButton.Text = "X"
+        closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        closeButton.TextSize = 14
+        closeButton.Parent = title
+        
+        local console = Instance.new("ScrollingFrame")
+        console.Name = "Console"
+        console.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        console.BackgroundTransparency = 0
+        console.BorderSizePixel = 0
+        console.Position = UDim2.new(0, 5, 0, 35)
+        console.Size = UDim2.new(1, -10, 1, -40)
+        console.CanvasSize = UDim2.new(0, 0, 0, 0)
+        console.ScrollBarThickness = 8
+        console.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        console.ScrollingDirection = Enum.ScrollingDirection.Y
+        console.Parent = frame
+        
+        local text = Instance.new("TextLabel")
+        text.Name = "Text"
+        text.BackgroundTransparency = 1
+        text.Position = UDim2.new(0, 5, 0, 5)
+        text.Size = UDim2.new(1, -18, 0, 1000)
+        text.CanvasSize = UDim2.new(0, 0, 0, 1000)
+        text.Font = Enum.Font.SourceSans
+        text.Text = "-- MythHub Debug Console Initialized --"
+        text.TextColor3 = Color3.fromRGB(200, 200, 200)
+        text.TextSize = 14
+        text.TextXAlignment = Enum.TextXAlignment.Left
+        text.TextYAlignment = Enum.TextYAlignment.Top
+        text.TextWrapped = true
+        text.Parent = console
+        
+        -- Make the console draggable
+        local dragging
+        local dragInput
+        local dragStart
+        local startPos
+        
+        local function update(input)
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
+        
+        title.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = frame.Position
+                
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+        
+        title.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
+            end
+        end)
+        
+        game:GetService("UserInputService").InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                update(input)
+            end
+        end)
+        
+        closeButton.MouseButton1Click:Connect(function()
+            screenGui.Enabled = false
+        end)
+        
+        screenGui.Parent = player.PlayerGui
+        Utilities.DebugPrint("Debug console created successfully")
     end)
 end
 
--- Function to dismiss battle end screen
-Utilities.DismissBattleEnd = function()
-    if Utilities.IsBattleEnded() then
-        -- Wait 3 seconds as specified
-        wait(3)
-        
-        -- Click M1 repeatedly until battle-end GUI is gone
-        local maxAttempts = 30 -- Maximum attempts to prevent infinite loop
-        local attempts = 0
-        
-        while Utilities.IsBattleEnded() and attempts < maxAttempts do
-            Utilities.ClickM1(5) -- Try 5 clicks each iteration
-            wait(0.5)
-            attempts = attempts + 1
-        end
-        
-        -- Wait a bit more to ensure everything is properly dismissed
-        wait(1)
-    end
-end
+-- Initialize debug console when script loads
+spawn(function()
+    wait(1) -- Wait a bit to ensure player is loaded
+    Utilities.CreateDebugConsole()
+end)
 
--- Function to handle battle flow and start next battle
-Utilities.StartNextBattle = function(enemyName)
-    -- First check if we're in a battle
-    if Utilities.IsInBattle() then
-        return false -- Already in battle, can't start a new one
+-- Create button to toggle console visibility in settings
+TabSettings:CreateButton({
+    Name = "Toggle Debug Console",
+    Description = "Show or hide the debug console",
+    Callback = function()
+        local player = Utilities.GetLocalPlayer()
+        if player and player.PlayerGui then
+            local console = player.PlayerGui:FindFirstChild("MythHubConsole")
+            if console then
+                console.Enabled = not console.Enabled
+                Utilities.Notify("Debug Console", console.Enabled and "Console shown" or "Console hidden", "settings")
+            else
+                Utilities.CreateDebugConsole()
+                Utilities.Notify("Debug Console", "Console created", "settings")
+            end
+        end
     end
-    
-    -- Check if we need to dismiss a battle end screen
-    if Utilities.IsBattleEnded() then
-        Utilities.DismissBattleEnd()
-    end
-    
-    -- Now try to summon the enemy
-    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
-        return Utilities.SummonEnemy(enemyName)
-    end
-    
-    return false
-end
+})
