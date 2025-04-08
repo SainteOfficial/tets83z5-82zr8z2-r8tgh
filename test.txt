@@ -40,15 +40,15 @@ local Utilities = {}
 
 -- Function to summon an enemy for battle
 Utilities.SummonEnemy = function(enemyName)
-    Utilities.DebugPrint("Attempting to summon enemy: " .. tostring(enemyName))
+    Utilities.DebugPrint("Attempting to fight enemy: " .. tostring(enemyName))
     
     if not enemyName then
-        Utilities.DebugPrint("Cannot summon nil enemy")
+        Utilities.DebugPrint("Cannot fight nil enemy")
         return false
     end
     
     local success, result = pcall(function()
-        -- Versuche den Gegner zu beschwören
+        -- Versuche einen Kampf mit dem Gegner zu beginnen
         local args = {
             [1] = enemyName
         }
@@ -58,11 +58,11 @@ Utilities.SummonEnemy = function(enemyName)
     end)
     
     if not success then
-        Utilities.DebugPrint("Error summoning enemy: " .. tostring(result))
+        Utilities.DebugPrint("Error starting fight with enemy: " .. tostring(result))
         return false
     end
     
-    Utilities.DebugPrint("Successfully sent summon request for: " .. enemyName)
+    Utilities.DebugPrint("Successfully sent fight request for: " .. enemyName)
     return true
 end
 
@@ -475,13 +475,13 @@ Window:CreateHomeTab({
 -- Dashboard Tab
 TabDashboard:CreateParagraph({
     Title = "Welcome to MythHub - Anime Card Clash",
-    Text = "Thank you for choosing MythHub Premium for Anime Card Clash. This script offers a comprehensive suite of features to enhance your gameplay experience. Navigate through the tabs to access various features and automation tools."
+    Text = "Thank you for choosing MythHub Premium for Anime Card Clash. This script offers a comprehensive suite of features to enhance your gameplay experience. Our premium features are optimized for the best executors on the market."
 })
 
-local stats_section = TabDashboard:CreateSection("Player Statistics")
+TabDashboard:CreateSection("Player Statistics")
 
-local player_stats = TabDashboard:CreateParagraph({
-    Title = "Player Stats",
+local stats_section = TabDashboard:CreateParagraph({
+    Title = "Your Statistics",
     Text = "Loading player statistics..."
 })
 
@@ -493,7 +493,7 @@ spawn(function()
             local infinite_floor = Utilities.GetInfiniteTowerFloor()
             local upgrade_points = Utilities.GetUpgradePoints()
             
-            player_stats:Set({
+            stats_section:Set({
                 Text = "Battle Tower Level: " .. tower_level .. 
                       "\nInfinite Tower Floor: " .. infinite_floor .. 
                       "\nAvailable Upgrade Points: " .. upgrade_points
@@ -504,9 +504,31 @@ end)
 
 TabDashboard:CreateDivider()
 
+-- Add executor compatibility warning
+TabDashboard:CreateSection("Executor Compatibility")
+
 TabDashboard:CreateParagraph({
-    Title = "Latest Updates",
-    Text = "• Added Auto Raid feature with boss detection\n• Improved AutoFarm efficiency and stability\n• Added auto-merge functionality\n• Fixed issues with Tower automation\n• Enhanced UI responsiveness"
+    Title = "Free Executor Limitations",
+    Text = "Please note that free executors may not support all features due to their limitations. Specifically:\n\n• Battle Tower automation will not work properly\n• Stat Points features are incompatible with free executors\n\nOther features like AutoFarm and basic automation should function normally. For the best experience, we recommend using premium executors such as Synapse X, Script-Ware, or Fluxus."
+})
+
+TabDashboard:CreateDivider()
+
+TabDashboard:CreateSection("Latest Updates")
+
+TabDashboard:CreateParagraph({
+    Title = "Recent Changes",
+    Text = "• Added Auto Raid function with boss detection\n• Improved AutoFarm efficiency and stability\n• Added Auto-Merge functionality\n• Fixed issues with Tower automation\n• Improved UI responsiveness"
+})
+
+-- Add premium features highlight
+TabDashboard:CreateDivider()
+
+TabDashboard:CreateSection("Premium Features")
+
+TabDashboard:CreateParagraph({
+    Title = "MythHub Premium Advantages",
+    Text = "• Advanced Battle Tower automation (Premium executors only)\n• Stat Points optimization system\n• Multi-world boss farming\n• Intelligent cooldown management\n• Automatic exploration team management\n• Premium support via our Discord"
 })
 
 -- AutoFarm Tab
@@ -634,7 +656,7 @@ local world_boss_dropdown = TabAutoFarm:CreateDropdown({
 }, "WorldBossSelection")
 
 TabAutoFarm:CreateButton({
-    Name = "Summon Selected Boss",
+    Name = "Fight Selected Boss",
     Description = "Start a battle against the selected world boss",
     Callback = function()
         local boss = world_boss_dropdown.CurrentOption
@@ -942,7 +964,7 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
     end
 }, "AutoFarmToggle")
 
--- Auto collect toggle
+-- Auto collect loop ändern (langsamerer Tween)
 local autocollect_toggle = TabAutoFarm:CreateToggle({
     Name = "Auto Collect Items",
     Description = "Automatically collects dropped items",
@@ -975,9 +997,9 @@ local autocollect_toggle = TabAutoFarm:CreateToggle({
                                 if character and character:FindFirstChild("HumanoidRootPart") then
                                     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
                                     
-                                    -- Tween to the item
+                                    -- Tween to the item (langsamerer Tween: 2.0 statt 0.5 Sekunden)
                                     local tweenService = game:GetService("TweenService")
-                                    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                                    local tweenInfo = TweenInfo.new(2.0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
                                     
                                     local tween = tweenService:Create(
                                         humanoidRootPart,
@@ -989,7 +1011,7 @@ local autocollect_toggle = TabAutoFarm:CreateToggle({
                                     tween.Completed:Wait()
                                     
                                     -- Wait a bit to ensure item is collected
-                                    wait(0.1)
+                                    wait(0.5)
                                 end
                             end
                         end
@@ -1059,18 +1081,6 @@ local automerge_toggle = TabAutoFarm:CreateToggle({
     end
 }, "AutoMergeToggle")
 
--- Cooldown slider
-local cooldown_slider = TabAutoFarm:CreateSlider({
-    Name = "Farm Cooldown (Minutes)",
-    Range = {1, 30},
-    Increment = 1,
-    CurrentValue = 10,
-    Callback = function(Value)
-        AutoFarmConfig.Interval = Value * 60 -- Convert to seconds
-        Utilities.Notify("Cooldown Updated", "Farm cooldown set to " .. Value .. " minutes", "timer")
-    end
-}, "FarmCooldownSlider")
-
 -- Towers Tab
 TabTowers:CreateSection("Battle Tower")
 
@@ -1091,17 +1101,37 @@ spawn(function()
     end
 end)
 
--- Battle Tower level input
-local battle_tower_input = TabTowers:CreateInput({
-    Name = "Enter Battle Tower Level",
-    Description = "Enter a specific tower level (1-100)",
-    PlaceholderText = "Enter level (1-100)",
-    CurrentValue = "",
-    Numeric = true,
-    MaxCharacters = 3,
-    Enter = true,
-    Callback = function(Text)
-        local level = tonumber(Text)
+-- Tower Level Config
+local TowerConfig = {
+    BattleTowerLevel = 1,
+    AutoContinuousLevel = false,
+    AutoHighestLevel = false,
+    Connections = {}
+}
+
+-- Battle Tower Level Dropdown instead of Input
+local battle_tower_dropdown = TabTowers:CreateDropdown({
+    Name = "Select Battle Tower Level",
+    Description = "Choose a Tower Level (1-100)",
+    Options = {"1", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", 
+               "55", "60", "65", "70", "75", "80", "85", "90", "95", "100"},
+    CurrentOption = {"1"},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        local level = tonumber(Option[1])
+        if level then
+            TowerConfig.BattleTowerLevel = level
+        end
+    end
+}, "BattleTowerLevelDropdown")
+
+-- Button to start the selected level
+TabTowers:CreateButton({
+    Name = "Start Battle Tower Level Once",
+    Description = "Start the selected Battle Tower level",
+    Callback = function()
+        local level = TowerConfig.BattleTowerLevel
         
         if level and level >= 1 and level <= 100 then
             local args = {
@@ -1113,18 +1143,117 @@ local battle_tower_input = TabTowers:CreateInput({
             end)
             
             if success then
-                Utilities.Notify("Battle Tower", "Starting Battle Tower at level " .. level, "castle")
+                Utilities.Notify("Battle Tower", "Battle Tower started at level " .. level, "castle")
             else
                 Utilities.Notify("Error", "Failed to start Battle Tower", "error")
             end
         else
-            Utilities.Notify("Error", "Please enter a valid level between 1 and 100", "error")
+            Utilities.Notify("Error", "Please select a valid level between 1 and 100", "error")
         end
     end
-}, "BattleTowerLevelInput")
+})
 
-TabTowers:CreateDivider()
+-- Toggle for continuous level
+local continuous_tower_toggle = TabTowers:CreateToggle({
+    Name = "Auto Continuous Battle Tower",
+    Description = "Continuously starts the selected Battle Tower level",
+    CurrentValue = false,
+    Callback = function(Value)
+        TowerConfig.AutoContinuousLevel = Value
+        
+        if Value then
+            -- Activate auto continuous level
+            Utilities.Notify("Battle Tower", "Auto Continuous Battle Tower activated for level " .. TowerConfig.BattleTowerLevel, "castle")
+            
+            -- Remove previous connections
+            if TowerConfig.Connections.AutoContinuous then
+                TowerConfig.Connections.AutoContinuous:Disconnect()
+            end
+            
+            -- Create new auto continuous loop
+            TowerConfig.Connections.AutoContinuous = spawn(function()
+                while TowerConfig.AutoContinuousLevel do
+                    -- Only start Battle Tower if we're not in a battle
+                    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+                        local args = {
+                            [1] = TowerConfig.BattleTowerLevel
+                        }
+                        
+                        pcall(function()
+                            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("c1438c4a-417f-41ee-9363-1ebabcc0bbd9"):FireServer(unpack(args))
+                        end)
+                        
+                        Utilities.DebugPrint("Auto Continuous Battle Tower - Level " .. TowerConfig.BattleTowerLevel .. " started")
+                    end
+                    
+                    wait(5) -- Check every 5 seconds
+                end
+            end)
+        else
+            -- Deactivate auto continuous level
+            Utilities.Notify("Battle Tower", "Auto Continuous Battle Tower deactivated", "stop_circle")
+            
+            -- End loop
+            if TowerConfig.Connections.AutoContinuous then
+                TowerConfig.Connections.AutoContinuous:Disconnect()
+                TowerConfig.Connections.AutoContinuous = nil
+            end
+        end
+    end
+}, "AutoContinuousTowerToggle")
 
+-- Toggle for automatic highest level
+local highest_tower_toggle = TabTowers:CreateToggle({
+    Name = "Auto Highest Battle Tower",
+    Description = "Automatically starts the highest possible Battle Tower level",
+    CurrentValue = false,
+    Callback = function(Value)
+        TowerConfig.AutoHighestLevel = Value
+        
+        if Value then
+            -- Activate auto highest level
+            Utilities.Notify("Battle Tower", "Auto Highest Battle Tower activated", "castle")
+            
+            -- Remove previous connections
+            if TowerConfig.Connections.AutoHighest then
+                TowerConfig.Connections.AutoHighest:Disconnect()
+            end
+            
+            -- Create new auto highest loop
+            TowerConfig.Connections.AutoHighest = spawn(function()
+                while TowerConfig.AutoHighestLevel do
+                    -- Only start Battle Tower if we're not in a battle
+                    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+                        local currentLevel = Utilities.GetBattleTowerLevel()
+                        
+                        local args = {
+                            [1] = currentLevel
+                        }
+                        
+                        pcall(function()
+                            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("c1438c4a-417f-41ee-9363-1ebabcc0bbd9"):FireServer(unpack(args))
+                        end)
+                        
+                        Utilities.DebugPrint("Auto Highest Battle Tower - Level " .. currentLevel .. " started")
+                    end
+                    
+                    wait(5) -- Check every 5 seconds
+                end
+            end)
+        else
+            -- Deactivate auto highest level
+            Utilities.Notify("Battle Tower", "Auto Highest Battle Tower deactivated", "stop_circle")
+            
+            -- End loop
+            if TowerConfig.Connections.AutoHighest then
+                TowerConfig.Connections.AutoHighest:Disconnect()
+                TowerConfig.Connections.AutoHighest = nil
+            end
+        end
+    end
+}, "AutoHighestTowerToggle")
+
+-- Infinite Tower Tab
 TabTowers:CreateSection("Infinite Tower")
 
 -- Infinite Tower floor display
@@ -1209,15 +1338,15 @@ local RaidConfig = {
 
 -- Auto Summon Eternal Dragon toggle
 local auto_summon_dragon_toggle = TabRaids:CreateToggle({
-    Name = "Auto Summon Eternal Dragon",
-    Description = "Automatically summons the Eternal Dragon at regular intervals",
+    Name = "Auto Fight Eternal Dragon",
+    Description = "Automatically fights the Eternal Dragon at regular intervals",
     CurrentValue = false,
     Callback = function(Value)
         RaidConfig.AutoSummonEternalDragon = Value
         
         if Value then
             -- Start auto summon
-            Utilities.Notify("Auto Raid", "Started auto summoning Eternal Dragon", "security")
+            Utilities.Notify("Auto Raid", "Started auto fighting Eternal Dragon", "security")
             
             -- Clear previous connections if any
             if RaidConfig.Connections.AutoSummonDragon then
@@ -1240,7 +1369,7 @@ local auto_summon_dragon_toggle = TabRaids:CreateToggle({
             end)
         else
             -- Stop auto summon
-            Utilities.Notify("Auto Raid", "Stopped auto summoning Eternal Dragon", "stop_circle")
+            Utilities.Notify("Auto Raid", "Stopped auto fighting Eternal Dragon", "stop_circle")
             
             -- Disconnect auto summon loop
             if RaidConfig.Connections.AutoSummonDragon then
@@ -1252,7 +1381,7 @@ local auto_summon_dragon_toggle = TabRaids:CreateToggle({
 }, "AutoSummonDragonToggle")
 
 TabRaids:CreateButton({
-    Name = "Summon Eternal Dragon Once",
+    Name = "Fight Eternal Dragon Once",
     Description = "Start a raid against the Eternal Dragon immediately",
     Callback = function()
         local success, result = pcall(function()
@@ -1264,7 +1393,7 @@ TabRaids:CreateButton({
         end)
         
         if success then
-            Utilities.Notify("Raid Started", "Successfully summoned the Eternal Dragon", "security")
+            Utilities.Notify("Raid Started", "Successfully started fight with Eternal Dragon", "security")
         else
             Utilities.Notify("Error", "Failed to start raid", "error")
         end
@@ -1347,66 +1476,148 @@ TabExploration:CreateDivider()
 
 TabExploration:CreateSection("Claim Rewards")
 
--- Buttons to claim exploration rewards
-TabExploration:CreateButton({
-    Name = "Claim Easy Exploration Rewards",
-    Description = "Claim rewards from easy difficulty explorations",
-    Callback = function()
-        local args = {
-            [1] = "easy"
-        }
-        
-        local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
-        end)
-        
-        if success then
-            Utilities.Notify("Rewards Claimed", "Successfully claimed easy exploration rewards", "redeem")
-        else
-            Utilities.Notify("Error", "Failed to claim rewards", "error")
-        end
-    end
-})
+-- Exploration Claim Config
+local ExplorationConfig = {
+    AutoClaimEasy = false,
+    AutoClaimMedium = false,
+    AutoClaimHard = false,
+    Connections = {}
+}
 
-TabExploration:CreateButton({
-    Name = "Claim Medium Exploration Rewards",
-    Description = "Claim rewards from medium difficulty explorations",
-    Callback = function()
-        local args = {
-            [1] = "medium"
-        }
+-- Auto Claim Easy Toggle
+local auto_claim_easy_toggle = TabExploration:CreateToggle({
+    Name = "Auto Claim Easy Exploration Rewards",
+    Description = "Automatically claims rewards from easy difficulty explorations",
+    CurrentValue = false,
+    Callback = function(Value)
+        ExplorationConfig.AutoClaimEasy = Value
         
-        local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
-        end)
-        
-        if success then
-            Utilities.Notify("Rewards Claimed", "Successfully claimed medium exploration rewards", "redeem")
+        if Value then
+            -- Activate Auto Claim
+            Utilities.Notify("Exploration", "Auto Claim Easy Rewards activated", "redeem")
+            
+            -- Remove previous connections
+            if ExplorationConfig.Connections.AutoClaimEasy then
+                ExplorationConfig.Connections.AutoClaimEasy:Disconnect()
+            end
+            
+            -- Create new Auto Claim loop
+            ExplorationConfig.Connections.AutoClaimEasy = spawn(function()
+                while ExplorationConfig.AutoClaimEasy do
+                    local args = {
+                        [1] = "easy"
+                    }
+                    
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                    end)
+                    
+                    Utilities.DebugPrint("Auto Claiming Easy Exploration Rewards")
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
         else
-            Utilities.Notify("Error", "Failed to claim rewards", "error")
+            -- Deactivate Auto Claim
+            Utilities.Notify("Exploration", "Auto Claim Easy Rewards deactivated", "stop_circle")
+            
+            -- End loop
+            if ExplorationConfig.Connections.AutoClaimEasy then
+                ExplorationConfig.Connections.AutoClaimEasy:Disconnect()
+                ExplorationConfig.Connections.AutoClaimEasy = nil
+            end
         end
     end
-})
+}, "AutoClaimEasyToggle")
 
-TabExploration:CreateButton({
-    Name = "Claim Hard Exploration Rewards",
-    Description = "Claim rewards from hard difficulty explorations",
-    Callback = function()
-        local args = {
-            [1] = "hard"
-        }
+-- Auto Claim Medium Toggle
+local auto_claim_medium_toggle = TabExploration:CreateToggle({
+    Name = "Auto Claim Medium Exploration Rewards",
+    Description = "Automatically claims rewards from medium difficulty explorations",
+    CurrentValue = false,
+    Callback = function(Value)
+        ExplorationConfig.AutoClaimMedium = Value
         
-        local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
-        end)
-        
-        if success then
-            Utilities.Notify("Rewards Claimed", "Successfully claimed hard exploration rewards", "redeem")
+        if Value then
+            -- Activate Auto Claim
+            Utilities.Notify("Exploration", "Auto Claim Medium Rewards activated", "redeem")
+            
+            -- Remove previous connections
+            if ExplorationConfig.Connections.AutoClaimMedium then
+                ExplorationConfig.Connections.AutoClaimMedium:Disconnect()
+            end
+            
+            -- Create new Auto Claim loop
+            ExplorationConfig.Connections.AutoClaimMedium = spawn(function()
+                while ExplorationConfig.AutoClaimMedium do
+                    local args = {
+                        [1] = "medium"
+                    }
+                    
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                    end)
+                    
+                    Utilities.DebugPrint("Auto Claiming Medium Exploration Rewards")
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
         else
-            Utilities.Notify("Error", "Failed to claim rewards", "error")
+            -- Deactivate Auto Claim
+            Utilities.Notify("Exploration", "Auto Claim Medium Rewards deactivated", "stop_circle")
+            
+            -- End loop
+            if ExplorationConfig.Connections.AutoClaimMedium then
+                ExplorationConfig.Connections.AutoClaimMedium:Disconnect()
+                ExplorationConfig.Connections.AutoClaimMedium = nil
+            end
         end
     end
-})
+}, "AutoClaimMediumToggle")
+
+-- Auto Claim Hard Toggle
+local auto_claim_hard_toggle = TabExploration:CreateToggle({
+    Name = "Auto Claim Hard Exploration Rewards",
+    Description = "Automatically claims rewards from hard difficulty explorations",
+    CurrentValue = false,
+    Callback = function(Value)
+        ExplorationConfig.AutoClaimHard = Value
+        
+        if Value then
+            -- Activate Auto Claim
+            Utilities.Notify("Exploration", "Auto Claim Hard Rewards activated", "redeem")
+            
+            -- Remove previous connections
+            if ExplorationConfig.Connections.AutoClaimHard then
+                ExplorationConfig.Connections.AutoClaimHard:Disconnect()
+            end
+            
+            -- Create new Auto Claim loop
+            ExplorationConfig.Connections.AutoClaimHard = spawn(function()
+                while ExplorationConfig.AutoClaimHard do
+                    local args = {
+                        [1] = "hard"
+                    }
+                    
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                    end)
+                    
+                    Utilities.DebugPrint("Auto Claiming Hard Exploration Rewards")
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
+        else
+            -- Deactivate Auto Claim
+            Utilities.Notify("Exploration", "Auto Claim Hard Rewards deactivated", "stop_circle")
+            
+            -- End loop
+            if ExplorationConfig.Connections.AutoClaimHard then
+                ExplorationConfig.Connections.AutoClaimHard:Disconnect()
+                ExplorationConfig.Connections.AutoClaimHard = nil
+            end
+        end
+    end
+}, "AutoClaimHardToggle")
 
 -- Shop Tab
 TabShop:CreateSection("Shop Management")
@@ -1915,3 +2126,41 @@ TabSettings:CreateButton({
         end
     end
 })
+
+-- Add global battle end detection loop
+spawn(function()
+    Utilities.DebugPrint("Starting global battle end detection loop")
+    while true do
+        wait(1) -- Check every second
+        
+        -- Check if battle just ended
+        if Utilities.IsBattleEnded() then
+            Utilities.DebugPrint("Battle end detected by global monitor, dismissing automatically")
+            Utilities.DismissBattleEnd()
+            
+            -- If not in an auto farm mode, still mark the last enemy as defeated
+            if not AutoFarmConfig.Enabled and not AutoFarmConfig.AutoFarmAllWorldBosses and not AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds then
+                Utilities.DebugPrint("Not in auto farm mode, but still recording cooldown for last enemy")
+                Utilities.EnsureEnemyCooldownsInitialized()
+                
+                -- Try to determine which enemy was defeated based on current world
+                local possibleLastEnemy = nil
+                
+                -- If we were in a raid, it might be the Eternal Dragon
+                if game.PlaceId == 9230754391 then -- Raid place ID
+                    possibleLastEnemy = "eternal_dragon"
+                else
+                    -- Otherwise, use the current enemy from the AutoFarm settings if available
+                    possibleLastEnemy = AutoFarmConfig.CurrentEnemy
+                end
+                
+                if possibleLastEnemy then
+                    Utilities.MarkEnemyDefeated(possibleLastEnemy)
+                end
+            end
+        end
+    end
+end)
+
+-- Enable autoload config
+Luna:LoadAutoloadConfig()
