@@ -1,14 +1,14 @@
 -- Luna Interface Suite laden
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
--- Fenster erstellen mit besserer Ladesequenz
+-- Fenster erstellen
 local Window = Luna:CreateWindow({
     Name = "Anime Card Clash - MythHub", 
     Subtitle = "v1.0",
     LogoID = nil, 
     LoadingEnabled = true,
-    LoadingTitle = "Anime Card Clash",
-    LoadingSubtitle = "MythHub Loading...",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "MythHub preparing...",
     
     ConfigSettings = {
         ConfigFolder = "MythHub_AnimeCardClash"
@@ -21,7 +21,7 @@ local Window = Luna:CreateWindow({
 local DashboardTab = Window:CreateTab({
     Name = "📊 Dashboard",
     Icon = "layout-dashboard", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide", -- Wichtig: "Lucide" als Quelle angeben
+    ImageSource = "Lucide", -- Muss "Lucide" sein
     ShowTitle = true
 })
 
@@ -52,7 +52,7 @@ DashboardTab:CreateParagraph({
 local AutoFarmTab = Window:CreateTab({
     Name = "⚔️ AutoFarm",
     Icon = "zap", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide",
+    ImageSource = "Lucide", -- Muss "Lucide" sein
     ShowTitle = true
 })
 
@@ -177,8 +177,8 @@ local killLogParagraph = AutoFarmTab:CreateParagraph({
 -- ###################### TOWERS TAB ######################
 local TowersTab = Window:CreateTab({
     Name = "🗼 Towers",
-    Icon = "buildings", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide",
+    Icon = "building", -- Korrekter Lucide-Icon-Name
+    ImageSource = "Lucide", -- Muss "Lucide" sein
     ShowTitle = true
 })
 
@@ -308,7 +308,7 @@ local autoStartToggle = TowersTab:CreateToggle({
 local RaidsTab = Window:CreateTab({
     Name = "🚧 Raids",
     Icon = "users", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide",
+    ImageSource = "Lucide", -- Muss "Lucide" sein
     ShowTitle = true
 })
 
@@ -322,7 +322,7 @@ RaidsTab:CreateParagraph({
 local ExplorationTab = Window:CreateTab({
     Name = "🌍 Exploration",
     Icon = "globe", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide",
+    ImageSource = "Lucide", -- Muss "Lucide" sein
     ShowTitle = true
 })
 
@@ -355,7 +355,7 @@ local tweenToItemToggle = ExplorationTab:CreateToggle({
 local ShopTab = Window:CreateTab({
     Name = "🛒 Shop",
     Icon = "shopping-cart", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide",
+    ImageSource = "Lucide", -- Muss "Lucide" sein
     ShowTitle = true
 })
 
@@ -369,7 +369,7 @@ ShopTab:CreateParagraph({
 local MiscTab = Window:CreateTab({
     Name = "🛠️ Misc",
     Icon = "tool", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide",
+    ImageSource = "Lucide", -- Muss "Lucide" sein
     ShowTitle = true
 })
 
@@ -449,7 +449,7 @@ local enemyCooldownsParagraph = MiscTab:CreateParagraph({
 local SettingsTab = Window:CreateTab({
     Name = "⚙️ Settings",
     Icon = "settings", -- Korrekter Lucide-Icon-Name
-    ImageSource = "Lucide",
+    ImageSource = "Lucide", -- Muss "Lucide" sein
     ShowTitle = true
 })
 
