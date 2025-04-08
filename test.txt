@@ -1,507 +1,622 @@
--- Luna Interface Suite laden
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
--- Fenster erstellen mit besserem Branding
+-- Hauptfenster erstellen
 local Window = Luna:CreateWindow({
-    Name = "Anime Card Clash - MythHub", 
-    Subtitle = "Premium", -- Fügt "Premium" als Untertitel hinzu
-    LogoID = nil,  
+    Name = "Anime Card Clash - MythHub",
+    Subtitle = "v1.0",
+    LogoID = nil, -- Kann später aktualisiert werden
     LoadingEnabled = true,
-    LoadingTitle = "MythHub",
-    LoadingSubtitle = "Premium Anime Card Clash Experience",
-    
+    LoadingTitle = "Anime Card Clash - MythHub",
+    LoadingSubtitle = "by MythTeam",
     ConfigSettings = {
-        ConfigFolder = "MythHub_AnimeCardClash"
+        RootFolder = nil,
+        ConfigFolder = "AnimeCardClash_MythHub"
     },
-    
     KeySystem = false
 })
 
--- ###################### DASHBOARD TAB ######################
+-- Dashboard Tab
 local DashboardTab = Window:CreateTab({
-    Name = "📊 Dashboard",
-    Icon = "dashboard", -- Korrektes Material-Icon für Dashboard
+    Name = "Dashboard",
+    Icon = "dashboard",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- MythHub Logo oder Beschreibung
-DashboardTab:CreateParagraph({
-    Title = "Welcome to MythHub Premium", 
-    Text = "The ultimate script hub for Anime Card Clash. Developed by professional exploiters to maximize your gaming experience."
-})
-
--- Status Panel
-DashboardTab:CreateSection("Status Information")
-
--- Status labels
-local autoFarmStatusLabel = DashboardTab:CreateLabel({
-    Text = "AutoFarm Status: Disabled",
-    Style = 1
-})
-
-local autoTowerStatusLabel = DashboardTab:CreateLabel({
-    Text = "AutoTower Status: Disabled",
-    Style = 1
-})
-
--- Discord Button für Werbung
-DashboardTab:CreateSection("Community")
-
-DashboardTab:CreateButton({
-    Name = "Join Discord Community",
-    Description = "Get access to exclusive scripts, updates and support!",
-    Callback = function()
-        -- Discord Einladung öffnen (füge deinen eigenen Link ein)
-        Luna:Notification({ 
-            Title = "Discord Invite",
-            Icon = "link",
-            ImageSource = "Material",
-            Content = "Join our Discord server for premium scripts and support! Link copied to clipboard."
-        })
-        
-        setclipboard("https://discord.gg/mythhub") -- Ersetze mit deinem tatsächlichen Discord-Link
-    end
-})
-
--- MythHub Werbebereich
-DashboardTab:CreateSection("MythHub Premium")
-
-DashboardTab:CreateParagraph({
-    Title = "Why Choose MythHub?", 
-    Text = "✅ Regular updates\n✅ 24/7 support in our Discord\n✅ Anti-detection features\n✅ Exclusive features not found elsewhere\n✅ Clean, professional interface"
-})
-
--- News & Updates
-DashboardTab:CreateSection("News & Updates")
-
-DashboardTab:CreateParagraph({
-    Title = "Latest Update", 
-    Text = "Version 1.0 released! New features coming soon."
-})
-
--- ###################### AUTOFARM TAB ######################
+-- AutoFarm Tab
 local AutoFarmTab = Window:CreateTab({
-    Name = "⚔️ AutoFarm",
-    Icon = "bolt",
+    Name = "AutoFarm",
+    Icon = "agriculture",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Target Type Section
-AutoFarmTab:CreateSection("Target Type")
-
--- Target Type Toggles
-local allEnemiesToggle = AutoFarmTab:CreateToggle({
-    Name = "🔘 All Enemies",
-    Description = "Targets all nearby enemies",
-    CurrentValue = true,
-    Callback = function(Value)
-        if Value then
-            -- If this toggle is activated, deactivate the boss-only toggle
-            if bossOnlyToggle and bossOnlyToggle.CurrentValue then
-                bossOnlyToggle:Set({CurrentValue = false})
-            end
-            -- Update AutoFarm status in Dashboard
-            autoFarmStatusLabel:Set({Text = "AutoFarm Status: All Enemies"})
-        elseif not (bossOnlyToggle and bossOnlyToggle.CurrentValue) then
-            -- If both toggles are deactivated, set status to Disabled
-            autoFarmStatusLabel:Set({Text = "AutoFarm Status: Disabled"})
-        end
-    end
-}, "AllEnemiesToggle")
-
-local bossOnlyToggle = AutoFarmTab:CreateToggle({
-    Name = "🔘 Bosses Only",
-    Description = "Targets bosses only",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value then
-            -- If this toggle is activated, deactivate the All-Enemies toggle
-            if allEnemiesToggle and allEnemiesToggle.CurrentValue then
-                allEnemiesToggle:Set({CurrentValue = false})
-            end
-            -- Update AutoFarm status in Dashboard
-            autoFarmStatusLabel:Set({Text = "AutoFarm Status: Bosses Only"})
-        elseif not (allEnemiesToggle and allEnemiesToggle.CurrentValue) then
-            -- If both toggles are deactivated, set status to Disabled
-            autoFarmStatusLabel:Set({Text = "AutoFarm Status: Disabled"})
-        end
-    end
-}, "BossOnlyToggle")
-
--- Map Selection Section
-AutoFarmTab:CreateSection("Map Selection")
-
--- Map Selection Toggles
-local allMapsToggle = AutoFarmTab:CreateToggle({
-    Name = "🔘 All Maps",
-    Description = "Farm on all available maps",
-    CurrentValue = true,
-    Callback = function(Value)
-        if Value then
-            -- If this toggle is activated, deactivate the Specific Maps dropdown
-            specificMapsDropdown:Set({Interaction = not Value})
-        end
-    end
-}, "AllMapsToggle")
-
--- Example maps for dropdown
-local mapOptions = {"Map 1", "Map 2", "Map 3", "Map 4", "Map 5"}
-
-local specificMapsDropdown = AutoFarmTab:CreateDropdown({
-    Name = "🔘 Specific Maps",
-    Description = "Select specific maps for farming",
-    Options = mapOptions,
-    CurrentOption = {"Map 1"},
-    MultipleOptions = true,
-    SpecialType = nil,
-    Interaction = false, -- Disabled when "All Maps" is enabled
-    Callback = function(Options)
-        -- Implement map selection logic here
-    end
-}, "SpecificMapsDropdown")
-
--- Start/Stop Button for Farming
-local farmingActive = false
-local farmingButton = AutoFarmTab:CreateButton({
-    Name = "Start Farming",
-    Description = "Start or stop the AutoFarm process",
-    Callback = function()
-        farmingActive = not farmingActive
-        
-        if farmingActive then
-            farmingButton:Set({Name = "Stop Farming"})
-            -- Implement farming logic here
-            -- Update status in Dashboard
-            if allEnemiesToggle.CurrentValue then
-                autoFarmStatusLabel:Set({Text = "AutoFarm Status: All Enemies (Active)"})
-            elseif bossOnlyToggle.CurrentValue then
-                autoFarmStatusLabel:Set({Text = "AutoFarm Status: Bosses Only (Active)"})
-            end
-        else
-            farmingButton:Set({Name = "Start Farming"})
-            -- Stop farming here
-            -- Update status in Dashboard
-            if allEnemiesToggle.CurrentValue then
-                autoFarmStatusLabel:Set({Text = "AutoFarm Status: All Enemies"})
-            elseif bossOnlyToggle.CurrentValue then
-                autoFarmStatusLabel:Set({Text = "AutoFarm Status: Bosses Only"})
-            end
-        end
-    end
-})
-
--- Current Enemy Label
-local currentEnemyLabel = AutoFarmTab:CreateLabel({
-    Text = "Current Enemy: None",
-    Style = 1
-})
-
--- Kill Log
-AutoFarmTab:CreateSection("Kill Log")
-
-local killLogParagraph = AutoFarmTab:CreateParagraph({
-    Title = "Killed Enemies", 
-    Text = "No enemies killed yet."
-})
-
--- ###################### TOWERS TAB ######################
+-- Towers Tab
 local TowersTab = Window:CreateTab({
-    Name = "🗼 Towers",
+    Name = "Towers",
     Icon = "apartment",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Battle Tower Section
-TowersTab:CreateSection("Battle Tower")
-
--- Battle Tower Mode
-local highestStageToggle = TowersTab:CreateToggle({
-    Name = "🔘 Highest Stage Automatically",
-    Description = "Automatically selects the highest available stage",
-    CurrentValue = true,
-    Callback = function(Value)
-        if Value then
-            -- Deactivate the slider for specific stage
-            specificStageSlider:Set({Interaction = not Value})
-        else
-            -- Activate the slider
-            specificStageSlider:Set({Interaction = true})
-        end
-    end
-}, "HighestStageToggle")
-
--- Slider for specific stage
-local specificStageSlider = TowersTab:CreateSlider({
-    Name = "🔘 Specific Stage",
-    Range = {1, 50}, -- Assuming Battle Tower has 50 stages
-    Increment = 1,
-    CurrentValue = 1,
-    Interaction = false, -- Default deactivated when Highest Stage is enabled
-    Callback = function(Value)
-        -- Implement stage selection logic here
-    end
-}, "SpecificStageSlider")
-
--- Start Tower Button
-local battleTowerActive = false
-local startTowerButton = TowersTab:CreateButton({
-    Name = "Start Battle Tower",
-    Description = "Start the Battle Tower",
-    Callback = function()
-        battleTowerActive = not battleTowerActive
-        
-        if battleTowerActive then
-            startTowerButton:Set({Name = "Stop Battle Tower"})
-            -- Start Battle Tower
-            -- Update status in Dashboard
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Battle Tower (Active)"})
-        else
-            startTowerButton:Set({Name = "Start Battle Tower"})
-            -- Stop Battle Tower
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Disabled"})
-        end
-    end
-})
-
--- Infinite Tower Section
-TowersTab:CreateSection("Infinite Tower")
-
--- Infinite Tower Buttons
-local infiniteTowerActive = false
-local infiniteTowerPaused = false
-
--- Start Button
-local startInfiniteTowerButton = TowersTab:CreateButton({
-    Name = "▶️ Start",
-    Description = "Start the Infinite Tower",
-    Callback = function()
-        if not infiniteTowerActive then
-            infiniteTowerActive = true
-            infiniteTowerPaused = false
-            -- Start Infinite Tower
-            -- Update status in Dashboard
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Infinite Tower (Active)"})
-        end
-    end
-})
-
--- Pause Button
-local pauseInfiniteTowerButton = TowersTab:CreateButton({
-    Name = "⏸️ Pause",
-    Description = "Pause the Infinite Tower",
-    Callback = function()
-        if infiniteTowerActive and not infiniteTowerPaused then
-            infiniteTowerPaused = true
-            -- Pause Infinite Tower
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Infinite Tower (Paused)"})
-        end
-    end
-})
-
--- Stop Button
-local stopInfiniteTowerButton = TowersTab:CreateButton({
-    Name = "⏹️ Stop",
-    Description = "Stop the Infinite Tower",
-    Callback = function()
-        if infiniteTowerActive then
-            infiniteTowerActive = false
-            infiniteTowerPaused = false
-            -- Stop Infinite Tower
-            autoTowerStatusLabel:Set({Text = "AutoTower Status: Disabled"})
-        end
-    end
-})
-
--- Realtime Display
-local currentFloorLabel = TowersTab:CreateLabel({
-    Text = "Current Floor: 0",
-    Style = 1
-})
-
-local runtimeLabel = TowersTab:CreateLabel({
-    Text = "Runtime: 00:00:00",
-    Style = 1
-})
-
--- AutoStart Option
-local autoStartToggle = TowersTab:CreateToggle({
-    Name = "AutoStart on Death/Completion",
-    Description = "Automatically restart the tower",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Implement AutoStart logic here
-    end
-}, "AutoStartToggle")
-
--- ###################### RAIDS TAB ######################
+-- Raids Tab
 local RaidsTab = Window:CreateTab({
-    Name = "🚧 Raids",
-    Icon = "groups",
-    ImageSource = "Material",
+    Name = "Raids",
+    Icon = "swords",
+    ImageSource = "Lucide",
     ShowTitle = true
 })
 
--- Coming Soon Display
-RaidsTab:CreateParagraph({
-    Title = "Coming Soon...", 
-    Text = "Raid functions will be added in a future update."
-})
-
--- ###################### EXPLORATION TAB ######################
+-- Exploration Tab
 local ExplorationTab = Window:CreateTab({
-    Name = "🌍 Exploration",
+    Name = "Exploration",
     Icon = "explore",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Coming Soon Display with preview functions
-ExplorationTab:CreateParagraph({
-    Title = "Coming Soon...", 
-    Text = "Full exploration features will be added in a future update."
-})
-
--- Preview functions
-local autoPickupToggle = ExplorationTab:CreateToggle({
-    Name = "AutoPickup Items",
-    Description = "Automatically collects items nearby",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Implement AutoPickup logic here
-    end
-}, "AutoPickupToggle")
-
-local tweenToItemToggle = ExplorationTab:CreateToggle({
-    Name = "Tween to nearest item",
-    Description = "Moves the character to the nearest item",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Implement Tween logic here
-    end
-}, "TweenToItemToggle")
-
--- ###################### SHOP TAB ######################
+-- Shop Tab
 local ShopTab = Window:CreateTab({
-    Name = "🛒 Shop",
+    Name = "Shop",
     Icon = "shopping_cart",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Coming Soon Display
-ShopTab:CreateParagraph({
-    Title = "Coming Soon...", 
-    Text = "Shop features will be added in a future update."
-})
-
--- ###################### MISC TAB ######################
+-- Misc Tab
 local MiscTab = Window:CreateTab({
-    Name = "🛠️ Misc",
-    Icon = "build",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
--- FPS Booster
-local fpsBoosterToggle = MiscTab:CreateToggle({
-    Name = "✅ FPS Booster",
-    Description = "Increases FPS by optimizing graphics",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value then
-            -- Activate FPS Booster
-            setfpscap(9999) -- Maximum FPS
-            local lighting = game:GetService("Lighting")
-            lighting.GlobalShadows = false
-            lighting.FogEnd = 9e9
-            
-            -- Additional optimizations
-            for _, v in pairs(workspace:GetDescendants()) do
-                if v:IsA("Part") or v:IsA("UnionOperation") or v:IsA("MeshPart") then
-                    v.Material = "Plastic"
-                    v.Reflectance = 0
-                end
-            end
-        else
-            -- Deactivate FPS Booster - restore default settings
-            setfpscap(60)
-            local lighting = game:GetService("Lighting")
-            lighting.GlobalShadows = true
-            lighting.FogEnd = 100000
-        end
-    end
-}, "FPSBoosterToggle")
-
--- Webhook Logger
-MiscTab:CreateSection("Webhook Logger")
-
-local webhookUrlInput = MiscTab:CreateInput({
-    Name = "Discord Webhook URL",
-    Description = "Enter the Discord Webhook URL",
-    PlaceholderText = "https://discord.com/api/webhooks/...",
-    CurrentValue = "",
-    Numeric = false,
-    Enter = false,
-    Callback = function(Text)
-        -- Save the Webhook URL
-    end
-}, "WebhookUrlInput")
-
-local webhookLoggerToggle = MiscTab:CreateToggle({
-    Name = "✅ Webhook Logger",
-    Description = "Sends logs to your Discord webhook",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Activate/deactivate Webhook Logger
-    end
-}, "WebhookLoggerToggle")
-
--- Enemy Cooldowns
-MiscTab:CreateSection("Enemy Cooldowns")
-
-local enemyCooldownsToggle = MiscTab:CreateToggle({
-    Name = "✅ Show Enemy Cooldowns",
-    Description = "Shows remaining time for boss respawns",
-    CurrentValue = false,
-    Callback = function(Value)
-        -- Activate/deactivate Enemy Cooldowns
-    end
-}, "EnemyCooldownsToggle")
-
--- Enemy Cooldown List
-local enemyCooldownsParagraph = MiscTab:CreateParagraph({
-    Title = "Remaining Cooldowns", 
-    Text = "Enable 'Show Enemy Cooldowns' to see the list."
-})
-
--- ###################### SETTINGS TAB ######################
-local SettingsTab = Window:CreateTab({
-    Name = "⚙️ Settings",
+    Name = "Misc",
     Icon = "settings",
     ImageSource = "Material",
     ShowTitle = true
 })
 
--- Add Theme Section
-SettingsTab:BuildThemeSection()
+-- Dashboard Tab Inhalte
+DashboardTab:CreateParagraph({
+    Title = "Willkommen bei Anime Card Clash - MythHub",
+    Text = "Dies ist ein umfassender Script Hub für Anime Card Clash. Entdecke automatisierte Funktionen für Farming, Towers, Raids und mehr!"
+})
 
--- Add Configuration Section
-SettingsTab:BuildConfigSection()
+DashboardTab:CreateLabel({
+    Text = "Entwickelt von MythTeam | Version 1.0",
+    Style = 1
+})
 
--- UI Toggle Keybind
-local UIBind = SettingsTab:CreateBind({
-    Name = "Toggle UI",
-    Description = "Press this key to show/hide the UI",
-    CurrentBind = "RightControl",
-    HoldToInteract = false,
-    Callback = function() end,
-    OnChangedCallback = function(Bind)
-        Window.Bind = Bind
+DashboardTab:CreateDivider()
+
+-- Spieler-Status-Anzeige
+DashboardTab:CreateSection("Spieler-Status")
+
+-- Wir werden später eine Funktion implementieren, um diese Informationen dynamisch zu aktualisieren
+local PlayerStatsLabel = DashboardTab:CreateLabel({
+    Text = "Lade Spielerdaten...",
+    Style = 1
+})
+
+DashboardTab:CreateDivider()
+
+-- AutoFarm Tab Inhalte
+AutoFarmTab:CreateSection("Enemy Farm")
+
+-- Welten-Auswahl
+local WorldDropdown = AutoFarmTab:CreateDropdown({
+    Name = "Welt auswählen",
+    Description = "Wähle die Welt, in der du farmen möchtest",
+    Options = {"Ninja Village", "Green Village", "Shibuya Station", "Titans City", "Dimensional Fortress", "Candy Island", "Solo City"},
+    CurrentOption = {"Ninja Village"},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        -- Wird später implementiert
+        print("Welt ausgewählt: " .. Option[1])
     end
-}, "UIToggleKeybind")
+}, "WorldDropdown")
 
--- IMPORTANT: Load auto-configuration (must be at the end!)
+-- Gegner-Auswahl für die jeweilige Welt
+local EnemyDropdown = AutoFarmTab:CreateDropdown({
+    Name = "Gegner auswählen",
+    Description = "Wähle den Gegner, den du farmen möchtest",
+    Options = {"ROCK LEE", "KAKASHI", "SASUKE", "NARUTO SAGE MODE", "PAIN", "NARUTO RAGE MODE (BOSS)"},
+    CurrentOption = {"ROCK LEE"},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        -- Wird später implementiert
+        print("Gegner ausgewählt: " .. Option[1])
+    end
+}, "EnemyDropdown")
+
+-- Auto Farm Toggle
+local AutoFarmToggle = AutoFarmTab:CreateToggle({
+    Name = "Auto Farm aktivieren",
+    Description = "Automatisches Bekämpfen des ausgewählten Gegners",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            print("Auto Farm aktiviert")
+            -- Hier kommt später die Farm-Logik
+        else
+            print("Auto Farm deaktiviert")
+        end
+    end
+}, "AutoFarmToggle")
+
+AutoFarmTab:CreateDivider()
+
+-- Auto Pick-Up Items
+AutoFarmTab:CreateSection("Auto Pick-Up Items")
+
+local AutoPickupToggle = AutoFarmTab:CreateToggle({
+    Name = "Auto Items Aufheben",
+    Description = "Automatisches Aufheben von Items in der Spielwelt",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            print("Auto Pickup aktiviert")
+            -- Implementierung folgt
+        else
+            print("Auto Pickup deaktiviert")
+        end
+    end
+}, "AutoPickupToggle")
+
+AutoFarmTab:CreateDivider()
+
+-- Auto Merge
+AutoFarmTab:CreateSection("Auto Merge")
+
+local AutoMergeToggle = AutoFarmTab:CreateToggle({
+    Name = "Auto Merge aktivieren",
+    Description = "Automatisches Zusammenführen von Karten für Upgrades",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            print("Auto Merge aktiviert")
+            -- Implementierung folgt
+        else
+            print("Auto Merge deaktiviert")
+        end
+    end
+}, "AutoMergeToggle")
+
+-- Towers Tab Inhalte
+TowersTab:CreateSection("Battle Tower")
+
+local BattleTowerLevelButton = TowersTab:CreateButton({
+    Name = "Battle Tower Level prüfen",
+    Description = "Zeigt dein aktuelles Battle Tower Level an",
+    Callback = function()
+        -- Implementierung des Level-Checks
+        local function checkBattleTowerLevel()
+            local LocalUserModule = game:GetService("ReplicatedStorage"):WaitForChild("TS"):WaitForChild("user"):WaitForChild("local"):WaitForChild("local-user")
+            
+            local success, result = pcall(function()
+                local LocalUser = require(LocalUserModule).LocalUser
+                local battleTowerWave = LocalUser.metadata:getAsNumber("battle_tower_wave")
+                return battleTowerWave or 1
+            end)
+            
+            if success then
+                Luna:Notification({ 
+                    Title = "Battle Tower Level",
+                    Icon = "apartment",
+                    ImageSource = "Material",
+                    Content = "Dein aktuelles Battle Tower Level: " .. result
+                })
+                return result
+            else
+                Luna:Notification({ 
+                    Title = "Fehler",
+                    Icon = "error",
+                    ImageSource = "Material",
+                    Content = "Konnte Battle Tower Level nicht abrufen"
+                })
+                return 1
+            end
+        end
+        
+        checkBattleTowerLevel()
+    end
+})
+
+local BattleTowerInput = TowersTab:CreateInput({
+    Name = "Battle Tower Level",
+    Description = "Gib das Level ein, das automatisch abgeschlossen werden soll (1-100)",
+    PlaceholderText = "1-100",
+    CurrentValue = "",
+    Numeric = true,
+    MaxCharacters = 3,
+    Enter = true,
+    Callback = function(Text)
+        local level = tonumber(Text)
+        if level and level >= 1 and level <= 100 then
+            -- Battle Tower Level abschließen
+            Luna:Notification({ 
+                Title = "Battle Tower",
+                Icon = "apartment",
+                ImageSource = "Material",
+                Content = "Starte Auto-Complete für Level " .. level
+            })
+            
+            local args = {
+                [1] = level
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("c1438c4a-417f-41ee-9363-1ebabcc0bbd9"):FireServer(unpack(args))
+        else
+            Luna:Notification({ 
+                Title = "Fehler",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Bitte gib ein gültiges Level zwischen 1 und 100 ein"
+            })
+        end
+    end
+}, "BattleTowerLevel")
+
+TowersTab:CreateDivider()
+
+TowersTab:CreateSection("Infinite Tower")
+
+local InfiniteTowerStatus = TowersTab:CreateLabel({
+    Text = "Status: Inaktiv",
+    Style = 1
+})
+
+local InfiniteTowerControls = TowersTab:CreateDropdown({
+    Name = "Infinite Tower Kontrolle",
+    Description = "Starten, Pausieren oder Stoppen des Infinite Tower",
+    Options = {"Starten", "Pausieren", "Stoppen"},
+    CurrentOption = {"Starten"},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        if Option[1] == "Starten" then
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("888b9aa0-9ca6-4c77-9946-cebf1edf613d"):FireServer()
+            InfiniteTowerStatus:Set({Text = "Status: Aktiv"})
+        elseif Option[1] == "Pausieren" then
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("a8a25480-c0f3-426b-834f-0f95cf058edc"):FireServer()
+            InfiniteTowerStatus:Set({Text = "Status: Pausiert"})
+        elseif Option[1] == "Stoppen" then
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("179a96b5-b8d2-4156-a939-6f34c92aa7a6"):FireServer()
+            InfiniteTowerStatus:Set({Text = "Status: Inaktiv"})
+        end
+    end
+}, "InfiniteTowerControls")
+
+local InfiniteTowerTrackerToggle = TowersTab:CreateToggle({
+    Name = "Floor Tracker aktivieren",
+    Description = "Verfolgt deinen aktuellen Floor im Infinite Tower",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            -- Tracker aktivieren
+            Luna:Notification({ 
+                Title = "Floor Tracker",
+                Icon = "apartment",
+                ImageSource = "Material",
+                Content = "Floor Tracker aktiviert"
+            })
+            
+            -- Implementierung folgt
+        else
+            -- Tracker deaktivieren
+            Luna:Notification({ 
+                Title = "Floor Tracker",
+                Icon = "apartment",
+                ImageSource = "Material",
+                Content = "Floor Tracker deaktiviert"
+            })
+        end
+    end
+}, "InfiniteTowerTracker")
+
+-- Raids Tab Inhalte
+RaidsTab:CreateSection("Raid Manager")
+
+local RaidButton = RaidsTab:CreateButton({
+    Name = "Eternal Dragon Raid starten",
+    Description = "Startet einen Eternal Dragon Raid",
+    Callback = function()
+        Luna:Notification({ 
+            Title = "Raid",
+            Icon = "swords",
+            ImageSource = "Lucide",
+            Content = "Starte Eternal Dragon Raid"
+        })
+        
+        local args = {
+            [1] = "eternal_dragon"
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+    end
+})
+
+-- Exploration Tab Inhalte
+ExplorationTab:CreateSection("Deploy System")
+
+local ExpeditionDropdown = ExplorationTab:CreateDropdown({
+    Name = "Schwierigkeit",
+    Description = "Wähle die Schwierigkeit für deine Expedition",
+    Options = {"Easy", "Medium", "Hard"},
+    CurrentOption = {"Easy"},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        -- Wird später implementiert
+        print("Schwierigkeit ausgewählt: " .. Option[1])
+    end
+}, "ExpeditionDifficulty")
+
+local DeployButton = ExplorationTab:CreateButton({
+    Name = "Deploy Team",
+    Description = "Entsende dein Team auf Expedition",
+    Callback = function()
+        local difficulty = string.lower(ExpeditionDropdown.CurrentOption[1])
+        
+        -- Vordefinierte Teams für unterschiedliche Schwierigkeiten
+        local teams = {
+            easy = {
+                [1] = "dark_avenger",
+                [2] = "black_swordsman",
+                [3] = "dark_avenger",
+                [4] = "dark_avenger"
+            },
+            medium = {
+                [1] = "bald_hero",
+                [2] = "bald_hero",
+                [3] = "bald_hero",
+                [4] = "bald_hero"
+            },
+            hard = {
+                [1] = "awakened_galactic_tyrant",
+                [2] = "awakened_galactic_tyrant",
+                [3] = "shadow_monarch:gold",
+                [4] = "genie_commander"
+            }
+        }
+        
+        local args = {
+            [1] = difficulty,
+            [2] = teams[difficulty]
+        }
+        
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("569ba6a6-d5ea-488e-b729-0f0b6dbaf40c"):FireServer(unpack(args))
+        
+        Luna:Notification({ 
+            Title = "Expedition",
+            Icon = "explore",
+            ImageSource = "Material",
+            Content = "Team für " .. difficulty:gsub("^%l", string.upper) .. " Expedition entsandt"
+        })
+    end
+})
+
+ExplorationTab:CreateDivider()
+
+ExplorationTab:CreateSection("Claim System")
+
+local ClaimEasyButton = ExplorationTab:CreateButton({
+    Name = "Claim Easy Rewards",
+    Description = "Sammle Belohnungen von Easy Expeditionen ein",
+    Callback = function()
+        local args = {
+            [1] = "easy"
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+        
+        Luna:Notification({ 
+            Title = "Expedition",
+            Icon = "explore",
+            ImageSource = "Material",
+            Content = "Easy Expedition Belohnungen eingesammelt"
+        })
+    end
+})
+
+local ClaimMediumButton = ExplorationTab:CreateButton({
+    Name = "Claim Medium Rewards",
+    Description = "Sammle Belohnungen von Medium Expeditionen ein",
+    Callback = function()
+        local args = {
+            [1] = "medium"
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+        
+        Luna:Notification({ 
+            Title = "Expedition",
+            Icon = "explore",
+            ImageSource = "Material",
+            Content = "Medium Expedition Belohnungen eingesammelt"
+        })
+    end
+})
+
+local ClaimHardButton = ExplorationTab:CreateButton({
+    Name = "Claim Hard Rewards",
+    Description = "Sammle Belohnungen von Hard Expeditionen ein",
+    Callback = function()
+        local args = {
+            [1] = "hard"
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+        
+        Luna:Notification({ 
+            Title = "Expedition",
+            Icon = "explore",
+            ImageSource = "Material",
+            Content = "Hard Expedition Belohnungen eingesammelt"
+        })
+    end
+})
+
+-- Shop Tab Inhalte
+ShopTab:CreateSection("Auto Buy Potions")
+
+local PotionTypes = {
+    "raid_luck_potion",
+    "raid_border_chance_potion",
+    "raid_cooldown_potion",
+    "raid_boss_chance_potion",
+    "raid_moon_cycle_reroll_potion",
+    "small_cooldown_reduction_potion",
+    "small_luck_potion",
+    "medium_luck_potion",
+    "medium_cooldown_reduction_potion",
+    "large_cooldown_reduction_potion",
+    "large_luck_potion"
+}
+
+local PotionNames = {
+    "Raid Luck Potion",
+    "Raid Border Chance Potion",
+    "Raid Cooldown Potion",
+    "Raid Boss Chance Potion",
+    "Raid Moon Cycle Reroll Potion",
+    "Small Cooldown Reduction Potion",
+    "Small Luck Potion",
+    "Medium Luck Potion",
+    "Medium Cooldown Reduction Potion",
+    "Large Cooldown Reduction Potion",
+    "Large Luck Potion"
+}
+
+local PotionDropdown = ShopTab:CreateDropdown({
+    Name = "Trank auswählen",
+    Description = "Wähle den Trank, den du kaufen möchtest",
+    Options = PotionNames,
+    CurrentOption = {PotionNames[1]},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        -- Wird beim Kauf verwendet
+    end
+}, "PotionDropdown")
+
+local BuyButton = ShopTab:CreateButton({
+    Name = "Trank kaufen",
+    Description = "Kauft den ausgewählten Trank",
+    Callback = function()
+        local selectedPotion = PotionDropdown.CurrentOption[1]
+        local potionIndex = table.find(PotionNames, selectedPotion)
+        
+        if potionIndex then
+            local args = {
+                [1] = PotionTypes[potionIndex],
+                [2] = 1 -- Anzahl
+            }
+            
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("54f5f951-af4e-447d-9ee4-c63d9130fe77"):FireServer(unpack(args))
+            
+            Luna:Notification({ 
+                Title = "Shop",
+                Icon = "shopping_cart",
+                ImageSource = "Material",
+                Content = selectedPotion .. " gekauft"
+            })
+        end
+    end
+})
+
+local QuantitySlider = ShopTab:CreateSlider({
+    Name = "Kaufmenge",
+    Range = {1, 10},
+    Increment = 1,
+    CurrentValue = 1,
+    Callback = function(Value)
+        -- Wird für die Kaufmenge verwendet
+    end
+}, "PotionQuantity")
+
+-- Misc Tab Inhalte
+MiscTab:CreateSection("Auto Stats Upgrade")
+
+local StatTypes = {
+    "BOSS_CHANCE",
+    "BORDER_CHANCE",
+    "POTION_DURATION",
+    "COOLDOWN_REDUCTION",
+    "LUCK"
+}
+
+local StatNames = {
+    "Boss Chance",
+    "Border Chance",
+    "Potion Duration",
+    "Cooldown Reduction",
+    "Luck"
+}
+
+local StatDropdown = MiscTab:CreateDropdown({
+    Name = "Stat auswählen",
+    Description = "Wähle den Stat, den du verbessern möchtest",
+    Options = StatNames,
+    CurrentOption = {StatNames[1]},
+    MultipleOptions = false,
+    SpecialType = nil,
+    Callback = function(Option)
+        -- Wird beim Upgrade verwendet
+    end
+}, "StatDropdown")
+
+local UpgradeButton = MiscTab:CreateButton({
+    Name = "Stat verbessern",
+    Description = "Verbessert den ausgewählten Stat",
+    Callback = function()
+        local selectedStat = StatDropdown.CurrentOption[1]
+        local statIndex = table.find(StatNames, selectedStat)
+        
+        if statIndex then
+            local args = {
+                [1] = StatTypes[statIndex]
+            }
+            
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("af785685-b79a-4491-8d84-e3b637aa6fc5"):FireServer(unpack(args))
+            
+            Luna:Notification({ 
+                Title = "Stat Upgrade",
+                Icon = "trending_up",
+                ImageSource = "Material",
+                Content = selectedStat .. " wurde verbessert"
+            })
+        end
+    end
+})
+
+local CheckPointsButton = MiscTab:CreateButton({
+    Name = "Verfügbare Punkte prüfen",
+    Description = "Zeigt die Anzahl deiner verfügbaren Upgrade-Punkte an",
+    Callback = function()
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local success, result = pcall(function()
+            local LocalUser = require(ReplicatedStorage:WaitForChild("TS"):WaitForChild("user"):WaitForChild("local"):WaitForChild("local-user")).LocalUser
+            return LocalUser.upgrades:getCards()
+        end)
+        
+        if success then
+            Luna:Notification({ 
+                Title = "Upgrade Points",
+                Icon = "stars",
+                ImageSource = "Material",
+                Content = "Du hast " .. result .. " Upgrade-Punkte verfügbar!"
+            })
+        else
+            Luna:Notification({ 
+                Title = "Error",
+                Icon = "error",
+                ImageSource = "Material",
+                Content = "Konnte Upgrade-Punkte nicht abrufen"
+            })
+        end
+    end
+})
+
+MiscTab:CreateDivider()
+
+-- UI Einstellungen
+MiscTab:BuildThemeSection()
+
+-- Konfigurations-Einstellungen am Ende hinzufügen
+MiscTab:BuildConfigSection()
+
+-- Auto-Load Konfiguration
 Luna:LoadAutoloadConfig()
