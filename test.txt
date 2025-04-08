@@ -32,7 +32,7 @@ local Window = Luna:CreateWindow({
         ConfigFolder = "AnimeCardClash"
     },
     
-    KeySystem = true,
+    KeySystem = false,
     KeySettings = {
         Title = "MythHub Authentication",
         Subtitle = "Premium Access Verification",
