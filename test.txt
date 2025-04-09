@@ -1,26 +1,28 @@
 --[[
-    MythHub - Premium Script Hub
+    MythHub Premium
     Game: Anime Card Clash
     Created by: MythTeam
     
     Features:
-    - Dashboard with information and stats
-    - AutoFarm for enemies across all worlds
-    - Tower automation for Battle and Infinite Towers
-    - Raid assistance and automation
-    - Exploration management
-    - Shop automation
-    - Misc utilities including auto pickup, auto merge, and more
+    - Dashboard mit Informationen und Statistiken
+    - AutoFarm für Gegner aus allen Welten
+    - Tower-Automatisierung für Battle und Infinite Towers
+    - Raid-Unterstützung und Automatisierung
+    - Explorations-Management
+    - Shop-Automatisierung
+    - Verschiedene Utilities wie Auto-Pickup, Auto-Merge und mehr
     
-    Last Updated: April 2025
+    Zuletzt aktualisiert: April 2025
 ]]
+
+print("Nothing to see here :O")
 
 -- Load Luna Interface Library
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
 -- Initialize Window without Key System
 local Window = Luna:CreateWindow({
-    Name = "MythHub",
+    Name = "MythHub Premium",
     Subtitle = "Anime Card Clash",
     LogoID = "134758479713826", -- MythHub logo ID
     LoadingEnabled = true,
@@ -40,15 +42,11 @@ local Utilities = {}
 
 -- Function to summon an enemy for battle
 Utilities.SummonEnemy = function(enemyName)
-    Utilities.DebugPrint("Attempting to fight enemy: " .. tostring(enemyName))
-    
     if not enemyName then
-        Utilities.DebugPrint("Cannot fight nil enemy")
         return false
     end
     
     local success, result = pcall(function()
-        -- Versuche einen Kampf mit dem Gegner zu beginnen
         local args = {
             [1] = enemyName
         }
@@ -58,11 +56,9 @@ Utilities.SummonEnemy = function(enemyName)
     end)
     
     if not success then
-        Utilities.DebugPrint("Error starting fight with enemy: " .. tostring(result))
         return false
     end
     
-    Utilities.DebugPrint("Successfully sent fight request for: " .. enemyName)
     return true
 end
 
@@ -137,92 +133,89 @@ Utilities.GetUpgradePoints = function()
     end
 end
 
--- Function to print debug messages
-Utilities.DebugPrint = function(message)
-    print("[MythHub Debug] " .. message)
-    -- Also add to console GUI if available
-    pcall(function()
-        if game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.PlayerGui and game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("MythHubConsole") then
-            local console = game:GetService("Players").LocalPlayer.PlayerGui.MythHubConsole
-            if console and console:FindFirstChild("Console") and console.Console:FindFirstChild("Text") then
-                console.Console.Text.Text = console.Console.Text.Text .. "\n" .. message
-            end
-        end
-    end)
-end
-
 -- Function to check if player is in battle
 Utilities.IsInBattle = function()
-    local localPlayer = Utilities.GetLocalPlayer()
-    if localPlayer and localPlayer.PlayerGui then
-        local hasBattleGui = localPlayer.PlayerGui:FindFirstChild("battle") ~= nil
-        Utilities.DebugPrint("Battle GUI check: " .. tostring(hasBattleGui))
-        return hasBattleGui
+    local success, result = pcall(function()
+        local localPlayer = Utilities.GetLocalPlayer()
+        if localPlayer and localPlayer.PlayerGui then
+            -- Prüft, ob eine der Kampf-GUIs existiert
+            local hasBattleGui = localPlayer.PlayerGui:FindFirstChild("battle") ~= nil
+            local hasHideBattleButton = localPlayer.PlayerGui:FindFirstChild("HideBattleButton") ~= nil
+            
+            -- Wenn eine der beiden GUIs existiert, ist der Spieler noch im Kampf
+            return hasBattleGui or hasHideBattleButton
+        end
+        return false
+    end)
+    
+    if success then
+        return result
+    else
+        return false
     end
-    Utilities.DebugPrint("Battle GUI check failed - player or GUI not found")
-    return false
 end
 
 -- Function to check if battle just ended
 Utilities.IsBattleEnded = function()
-    local localPlayer = Utilities.GetLocalPlayer()
-    if localPlayer and localPlayer.PlayerGui then
-        local hasBattleEndGui = localPlayer.PlayerGui:FindFirstChild("battle-end") ~= nil
-        Utilities.DebugPrint("Battle-End GUI check: " .. tostring(hasBattleEndGui))
-        return hasBattleEndGui
+    local success, result = pcall(function()
+        local localPlayer = Utilities.GetLocalPlayer()
+        if localPlayer and localPlayer.PlayerGui then
+            local hasBattleEndGui = localPlayer.PlayerGui:FindFirstChild("battle-end") ~= nil
+            return hasBattleEndGui
+        end
+        return false
+    end)
+    
+    if success then
+        return result
+    else
+        return false
     end
-    Utilities.DebugPrint("Battle-End GUI check failed - player or GUI not found")
-    return false
 end
 
--- Function to simulate mouse clicks (M1)
+-- Function to simulate mouse clicks (M1) in the middle-bottom of the screen
 Utilities.ClickM1 = function(times)
-    times = times or 10 -- Default to 10 clicks
+    times = times or 10
     
-    Utilities.DebugPrint("Attempting to send " .. times .. " M1 clicks")
     pcall(function()
+        -- Get screen size
+        local screenSize = workspace.CurrentCamera.ViewportSize
+        local middleX = screenSize.X / 2
+        local lowerY = screenSize.Y * 0.7 -- 70% down the screen (middle-bottom)
+        
         for i = 1, times do
-            Utilities.DebugPrint("Sending M1 click " .. i .. "/" .. times)
-            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, true, game, 1)
+            game:GetService("VirtualInputManager"):SendMouseButtonEvent(middleX, lowerY, 0, true, game, 1)
             wait(0.1)
-            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, false, game, 1)
+            game:GetService("VirtualInputManager"):SendMouseButtonEvent(middleX, lowerY, 0, false, game, 1)
             wait(0.1)
         end
     end)
-    Utilities.DebugPrint("Finished sending M1 clicks")
 end
 
 -- Function to dismiss battle end screen
 Utilities.DismissBattleEnd = function()
-    Utilities.DebugPrint("DismissBattleEnd function called")
-    if Utilities.IsBattleEnded() then
-        Utilities.DebugPrint("Battle-End detected, waiting 3 seconds before clicking")
-        wait(3)
-        
-        -- Click M1 repeatedly until battle-end GUI is gone
-        local maxAttempts = 30 -- Maximum attempts to prevent infinite loop
-        local attempts = 0
-        
-        Utilities.DebugPrint("Starting to click M1 to dismiss Battle-End")
-        while Utilities.IsBattleEnded() and attempts < maxAttempts do
-            Utilities.DebugPrint("Click attempt " .. attempts+1 .. "/" .. maxAttempts)
-            Utilities.ClickM1(3) -- Try 3 clicks each iteration, changed from 5
-            wait(0.5)
-            attempts = attempts + 1
+    -- Sicherheitsüberprüfung mit pcall
+    pcall(function()
+        if Utilities.IsBattleEnded() then
+            wait(3)
+            
+            -- Klicke M1 wiederholt, bis der Endbildschirm weg ist
+            local maxAttempts = 30 -- Maximale Versuche, um Endlosschleifen zu vermeiden
+            local attempts = 0
+            
+            while Utilities.IsBattleEnded() and attempts < maxAttempts do
+                -- Versuche, mit M1 zu klicken
+                pcall(function()
+                    Utilities.ClickM1(3)
+                end)
+                wait(0.5)
+                attempts = attempts + 1
+            end
+            
+            -- Etwas länger warten, um sicherzustellen, dass alles geschlossen ist
+            wait(1)
         end
-        
-        if attempts >= maxAttempts then
-            Utilities.DebugPrint("WARNING: Failed to dismiss Battle-End after " .. maxAttempts .. " attempts")
-        else
-            Utilities.DebugPrint("Successfully dismissed Battle-End GUI after " .. attempts .. " attempts")
-        end
-        
-        -- Wait a bit more to ensure everything is properly dismissed
-        Utilities.DebugPrint("Waiting 1 second extra to ensure dismissal is complete")
-        wait(1)
-    else
-        Utilities.DebugPrint("No Battle-End GUI detected, nothing to dismiss")
-    end
+    end)
 end
 
 -- AutoFarm Configuration
@@ -233,7 +226,7 @@ local AutoFarmConfig = {
     AutoCollect = false,
     AutoMerge = false,
     AutoFarmAllWorldBosses = false,
-    AutoFarmAllEnemiesInSelectedWorlds = false,
+    AutoFarmAllEnemies = false,
     SelectedWorlds = {"Ninja Village"},
     SelectedEnemies = {"unstoppable_fist"},
     WorldBosses = {
@@ -310,86 +303,95 @@ local AutoFarmConfig = {
 -- Funktion, um sicherzustellen, dass EnemyCooldowns existiert
 Utilities.EnsureEnemyCooldownsInitialized = function()
     if not AutoFarmConfig.EnemyCooldowns then
-        Utilities.DebugPrint("EnemyCooldowns was nil, initializing as empty table")
         AutoFarmConfig.EnemyCooldowns = {}
     end
 end
 
 -- Function to handle battle flow and start next battle
 Utilities.StartNextBattle = function(enemyName)
-    Utilities.DebugPrint("StartNextBattle called for enemy: " .. tostring(enemyName))
+    -- Sicherheitsüberprüfung für nil
+    if not enemyName then
+        return false
+    end
     
     -- Stellen wir sicher, dass EnemyCooldowns existiert
     Utilities.EnsureEnemyCooldownsInitialized()
     
-    -- Check if enemy is on cooldown
-    local currentTime = os.time()
-    if enemyName and AutoFarmConfig.EnemyCooldowns[enemyName] and AutoFarmConfig.EnemyCooldowns[enemyName] > currentTime then
-        local remainingCooldown = math.ceil(AutoFarmConfig.EnemyCooldowns[enemyName] - currentTime)
-        Utilities.DebugPrint("Enemy " .. enemyName .. " is still on cooldown for " .. remainingCooldown .. " seconds")
+    -- Cooldown-Überprüfung mit Fehlerbehandlung
+    local onCooldown = false
+    pcall(function()
+        local currentTime = os.time()
+        if enemyName and AutoFarmConfig.EnemyCooldowns[enemyName] and AutoFarmConfig.EnemyCooldowns[enemyName] > currentTime then
+            onCooldown = true
+        end
+    end)
+    
+    if onCooldown then
         return false
     end
     
-    -- First check if we're in a battle
-    if Utilities.IsInBattle() then
-        Utilities.DebugPrint("Already in battle, cannot start new battle")
-        return false -- Already in battle, can't start a new one
+    -- Überprüfung des Spielstatus mit Fehlerbehandlung
+    local inBattle = Utilities.IsInBattle()
+    local battleEnded = Utilities.IsBattleEnded()
+    
+    if inBattle then
+        return false -- Bereits im Kampf, kann keinen neuen starten
     end
     
-    -- Check if we need to dismiss a battle end screen
-    if Utilities.IsBattleEnded() then
-        Utilities.DebugPrint("Battle-End screen detected, attempting to dismiss")
-        Utilities.DismissBattleEnd()
+    if battleEnded then
+        pcall(function()
+            Utilities.DismissBattleEnd()
+        end)
+        wait(1) -- Kurz warten, um sicherzustellen, dass der Endbildschirm weg ist
         return false
     end
     
-    -- Now try to summon the enemy if not in battle and no battle end screen
+    -- Erneute Überprüfung, ob wir den Kampf starten können
     if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
-        Utilities.DebugPrint("No battle or battle-end detected, attempting to summon: " .. tostring(enemyName))
-        local success = Utilities.SummonEnemy(enemyName)
+        local success = false
+        
+        -- Versuche, den Gegner zu beschwören
+        pcall(function()
+            local args = {
+                [1] = enemyName
+            }
+            
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+            success = true
+        end)
         
         if success then
-            Utilities.DebugPrint("Summon attempt successful, waiting 2 seconds for battle to start")
-            -- Wait 2 seconds to allow battle to start properly
+            -- Warten, damit der Kampf gestartet werden kann
             wait(2)
             
-            -- Check if we successfully entered battle
+            -- Prüfen, ob wir im Kampf sind
             if Utilities.IsInBattle() then
-                Utilities.DebugPrint("Successfully entered battle with " .. enemyName)
                 return true
             else
-                -- If we didn't enter battle but summoned successfully, the enemy might be on cooldown
-                Utilities.DebugPrint("Summoned enemy but didn't enter battle, setting cooldown for " .. enemyName)
-                if enemyName then
-                    AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + AutoFarmConfig.Interval
-                end
+                -- Wenn wir nicht im Kampf sind, obwohl wir den Gegner beschworen haben, könnte er auf Cooldown sein
+                pcall(function()
+                    if enemyName and not (enemyName == "eternal_dragon" or enemyName == "shadow_dragon") then
+                        AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + AutoFarmConfig.Interval
+                    end
+                end)
                 return false
             end
-        else
-            Utilities.DebugPrint("Summon attempt failed for: " .. tostring(enemyName))
         end
         
         return success
     end
     
-    Utilities.DebugPrint("Failed to start battle - either still in battle or battle-end state")
     return false
 end
 
 -- Function to mark an enemy as defeated (sets its cooldown)
 Utilities.MarkEnemyDefeated = function(enemyName)
-    -- Stellen wir sicher, dass EnemyCooldowns existiert
-    Utilities.EnsureEnemyCooldownsInitialized()
-    
     if not enemyName then
-        Utilities.DebugPrint("Cannot mark nil enemy as defeated")
         return
     end
     
-    Utilities.DebugPrint("Marking enemy as defeated: " .. tostring(enemyName))
-    
-    -- Check if enemy is a raid boss (eternal_dragon) or world boss
-    local isRaidBoss = (enemyName == "eternal_dragon")
+    -- Check if enemy is a raid boss (eternal_dragon or shadow_dragon) or world boss
+    local isRaidBoss = (enemyName == "eternal_dragon" or enemyName == "shadow_dragon")
     local isWorldBoss = false
     
     -- Check if it's a world boss
@@ -402,15 +404,13 @@ Utilities.MarkEnemyDefeated = function(enemyName)
     
     -- Only set cooldown if it's not a raid boss
     if isRaidBoss then
-        Utilities.DebugPrint("Enemy " .. enemyName .. " is a Raid Boss - no cooldown applied")
+        return
     elseif isWorldBoss then
         -- Still apply cooldown for world bosses (not raid bosses)
         AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + 600
-        Utilities.DebugPrint("World Boss " .. enemyName .. " will be available again in 10 minutes (at " .. os.date("%H:%M:%S", AutoFarmConfig.EnemyCooldowns[enemyName]) .. ")")
     else
         -- Set cooldown to exactly 10 minutes (600 seconds) for regular enemies
         AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + 600
-        Utilities.DebugPrint("Enemy " .. enemyName .. " will be available again in 10 minutes (at " .. os.date("%H:%M:%S", AutoFarmConfig.EnemyCooldowns[enemyName]) .. ")")
     end
 end
 
@@ -546,14 +546,14 @@ local TabSettings = Window:CreateTab({
 
 -- Create Home Tab with information dashboard
 Window:CreateHomeTab({
-    SupportedExecutors = {"Synapse X", "Script-Ware", "Krnl", "Fluxus", "Electron", "Oxygen U"},
-    DiscordInvite = "MythHubDiscord", -- Replace with actual Discord code
+    SupportedExecutors = {}, -- Kein Executor-Check, damit der Script für alle funktioniert
+    DiscordInvite = "MythHubDiscord",
     Icon = 2
 })
 
 -- Dashboard Tab
 TabDashboard:CreateParagraph({
-    Title = "Welcome to MythHub - Anime Card Clash",
+    Title = "Welcome to MythHub Premium - Anime Card Clash",
     Text = "Thank you for choosing MythHub Premium for Anime Card Clash. This script offers a comprehensive suite of features to enhance your gameplay experience. Our premium features are optimized for the best executors on the market."
 })
 
@@ -763,17 +763,14 @@ local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
         
         if Value then
             -- Start auto farm all bosses
-            Utilities.DebugPrint("Auto Farm All World Bosses toggle activated")
             Utilities.Notify("Auto Farm", "Started auto farming all world bosses", "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarmAllBosses then
-                Utilities.DebugPrint("Disconnecting previous Auto Farm All Bosses connection")
                 AutoFarmConfig.Connections.AutoFarmAllBosses:Disconnect()
             end
             
             -- Create new auto farm loop
-            Utilities.DebugPrint("Starting Auto Farm All Bosses loop for " .. #AutoFarmConfig.WorldBosses .. " bosses")
             AutoFarmConfig.Connections.AutoFarmAllBosses = spawn(function()
                 local currentBossIndex = 1
                 local currentBoss = AutoFarmConfig.WorldBosses[currentBossIndex] or "bijuu_beast"
@@ -818,17 +815,14 @@ local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
                             currentBossIndex = shortestIndex
                             currentBoss = AutoFarmConfig.WorldBosses[currentBossIndex]
                             
-                            Utilities.DebugPrint("All bosses on cooldown. Waiting for " .. currentBoss .. " (shortest cooldown: " .. math.max(0, shortestCooldown) .. " seconds)")
                             wait(math.min(5, math.max(1, shortestCooldown))) -- Wait at least 1 second, at most 5 seconds
                         else
                             -- Try to start battle with current boss (which is not on cooldown)
-                            Utilities.DebugPrint("Attempting to start battle with boss: " .. tostring(currentBoss))
                             Utilities.StartNextBattle(currentBoss)
                         end
                     elseif Utilities.IsInBattle() then
-                        Utilities.DebugPrint("Currently in boss battle with " .. currentBoss .. ", waiting...")
+                        wait(2)
                     elseif Utilities.IsBattleEnded() then
-                        Utilities.DebugPrint("Boss battle ended with " .. currentBoss .. ", dismissing end screen")
                         Utilities.DismissBattleEnd()
                         
                         -- Once battle is dismissed, mark the boss as defeated and move to next
@@ -847,121 +841,12 @@ local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
             end)
         else
             -- Stop auto farm all bosses
-            Utilities.DebugPrint("Auto Farm All World Bosses toggle deactivated")
             Utilities.Notify("Auto Farm", "Stopped auto farming all world bosses", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarmAllBosses then
-                Utilities.DebugPrint("Disconnecting Auto Farm All Bosses loop")
                 AutoFarmConfig.Connections.AutoFarmAllBosses:Disconnect()
                 AutoFarmConfig.Connections.AutoFarmAllBosses = nil
-            end
-        end
-    end
-}, "AutoFarmAllBossesToggle")
-
--- Auto Farm All Enemies in Selected Worlds toggle
-local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto Farm All Enemies",
-    Description = "Automatically cycles through all enemies in order from all worlds",
-    CurrentValue = false,
-    Callback = function(Value)
-        AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds = Value
-        
-        if Value then
-            -- Start auto farm all enemies
-            Utilities.DebugPrint("Auto Farm All Enemies toggle activated")
-            Utilities.Notify("Auto Farm", "Started auto farming all enemies in order", "auto_mode")
-            
-            -- Clear previous connections if any
-            if AutoFarmConfig.Connections.AutoFarmAllEnemies then
-                Utilities.DebugPrint("Disconnecting previous Auto Farm All Enemies connection")
-                AutoFarmConfig.Connections.AutoFarmAllEnemies:Disconnect()
-            end
-            
-            -- Create new auto farm loop
-            Utilities.DebugPrint("Starting Auto Farm All Enemies loop for " .. #AutoFarmConfig.AllEnemies .. " enemies")
-            AutoFarmConfig.Connections.AutoFarmAllEnemies = spawn(function()
-                local currentEnemyIndex = 1
-                local currentEnemy = AutoFarmConfig.AllEnemies[currentEnemyIndex] or "unstoppable_fist"
-                
-                while AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds do
-                    -- Check if we can start a battle
-                    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
-                        -- Try to find an enemy that's not on cooldown
-                        local allOnCooldown = true
-                        local startingIndex = currentEnemyIndex
-                        
-                        for i = 1, #AutoFarmConfig.AllEnemies do
-                            -- Calculate the next enemy index with wrap-around
-                            local nextIndex = (startingIndex + i - 1) % #AutoFarmConfig.AllEnemies + 1
-                            local nextEnemy = AutoFarmConfig.AllEnemies[nextIndex]
-                            
-                            -- Check if this enemy is on cooldown
-                            local currentTime = os.time()
-                            if not AutoFarmConfig.EnemyCooldowns[nextEnemy] or AutoFarmConfig.EnemyCooldowns[nextEnemy] <= currentTime then
-                                currentEnemyIndex = nextIndex
-                                currentEnemy = nextEnemy
-                                allOnCooldown = false
-                                break
-                            end
-                        end
-                        
-                        if allOnCooldown then
-                            -- All enemies are on cooldown, find the one with the shortest remaining cooldown
-                            local shortestCooldown = math.huge
-                            local shortestIndex = 1
-                            
-                            for i = 1, #AutoFarmConfig.AllEnemies do
-                                local enemy = AutoFarmConfig.AllEnemies[i]
-                                local remainingCooldown = (AutoFarmConfig.EnemyCooldowns[enemy] or 0) - currentTime
-                                
-                                if remainingCooldown < shortestCooldown then
-                                    shortestCooldown = remainingCooldown
-                                    shortestIndex = i
-                                end
-                            end
-                            
-                            currentEnemyIndex = shortestIndex
-                            currentEnemy = AutoFarmConfig.AllEnemies[currentEnemyIndex]
-                            
-                            Utilities.DebugPrint("All enemies on cooldown. Waiting for " .. currentEnemy .. " (shortest cooldown: " .. math.max(0, shortestCooldown) .. " seconds)")
-                            wait(math.min(5, math.max(1, shortestCooldown))) -- Wait at least 1 second, at most 5 seconds
-                        else
-                            -- Try to start battle with current enemy (which is not on cooldown)
-                            Utilities.DebugPrint("Attempting to start battle with: " .. tostring(currentEnemy))
-                            Utilities.StartNextBattle(currentEnemy)
-                        end
-                    elseif Utilities.IsInBattle() then
-                        Utilities.DebugPrint("Currently in battle with " .. currentEnemy .. ", waiting...")
-                    elseif Utilities.IsBattleEnded() then
-                        Utilities.DebugPrint("Battle ended with " .. currentEnemy .. ", dismissing end screen")
-                        Utilities.DismissBattleEnd()
-                        
-                        -- Once battle is dismissed, mark the enemy as defeated and move to next
-                        if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
-                            Utilities.MarkEnemyDefeated(currentEnemy)
-                            
-                            -- Move to next enemy for next iteration (always move in sequence)
-                            currentEnemyIndex = currentEnemyIndex % #AutoFarmConfig.AllEnemies + 1
-                            currentEnemy = AutoFarmConfig.AllEnemies[currentEnemyIndex]
-                        end
-                    end
-                    
-                    -- Wait 1 second before next check
-                    wait(1)
-                end
-            end)
-        else
-            -- Stop auto farm all enemies
-            Utilities.DebugPrint("Auto Farm All Enemies toggle deactivated")
-            Utilities.Notify("Auto Farm", "Stopped auto farming all enemies", "stop_circle")
-            
-            -- Disconnect auto farm loop
-            if AutoFarmConfig.Connections.AutoFarmAllEnemies then
-                Utilities.DebugPrint("Disconnecting Auto Farm All Enemies loop")
-                AutoFarmConfig.Connections.AutoFarmAllEnemies:Disconnect()
-                AutoFarmConfig.Connections.AutoFarmAllEnemies = nil
             end
         end
     end
@@ -976,61 +861,39 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
         AutoFarmConfig.Enabled = Value
         
         if Value then
-            -- Start auto farm
-            Utilities.DebugPrint("Auto Farm toggle activated for enemy: " .. tostring(AutoFarmConfig.CurrentEnemy))
             Utilities.Notify("Auto Farm", "Started auto farming " .. AutoFarmConfig.CurrentEnemy .. " in " .. table.concat(AutoFarmConfig.SelectedWorlds, ", "), "auto_mode")
             
-            -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarm then
-                Utilities.DebugPrint("Disconnecting previous Auto Farm connection")
                 AutoFarmConfig.Connections.AutoFarm:Disconnect()
             end
             
-            -- Create new auto farm loop
-            Utilities.DebugPrint("Starting Auto Farm loop")
             AutoFarmConfig.Connections.AutoFarm = spawn(function()
                 while AutoFarmConfig.Enabled do
-                    Utilities.DebugPrint("Auto Farm loop iteration for enemy: " .. tostring(AutoFarmConfig.CurrentEnemy))
-                    
-                    -- Stellen wir sicher, dass EnemyCooldowns existiert
-                    Utilities.EnsureEnemyCooldownsInitialized()
-                    
-                    -- Check if we can start a battle (not in battle, not at battle end, and enemy not on cooldown)
                     if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
-                        -- Check if enemy is on cooldown
                         local currentTime = os.time()
                         if AutoFarmConfig.CurrentEnemy and AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] and AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] > currentTime then
                             local remainingCooldown = math.ceil(AutoFarmConfig.EnemyCooldowns[AutoFarmConfig.CurrentEnemy] - currentTime)
-                            Utilities.DebugPrint("Current enemy still on cooldown for " .. remainingCooldown .. " seconds")
+                            wait(math.min(5, remainingCooldown))
                         else
-                            -- Try to start a battle with current enemy
-                            Utilities.DebugPrint("Attempting to start battle with: " .. tostring(AutoFarmConfig.CurrentEnemy))
                             Utilities.StartNextBattle(AutoFarmConfig.CurrentEnemy)
                         end
                     elseif Utilities.IsInBattle() then
-                        Utilities.DebugPrint("Currently in battle, waiting...")
+                        wait(2)
                     elseif Utilities.IsBattleEnded() then
-                        Utilities.DebugPrint("Battle ended, attempting to dismiss end screen")
                         Utilities.DismissBattleEnd()
                         
-                        -- Once battle is dismissed, mark the enemy as defeated
                         if AutoFarmConfig.CurrentEnemy and not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
                             Utilities.MarkEnemyDefeated(AutoFarmConfig.CurrentEnemy)
                         end
                     end
                     
-                    -- Wait 1 second before next check
                     wait(1)
                 end
             end)
         else
-            -- Stop auto farm
-            Utilities.DebugPrint("Auto Farm toggle deactivated")
             Utilities.Notify("Auto Farm", "Stopped auto farming", "stop_circle")
             
-            -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarm then
-                Utilities.DebugPrint("Disconnecting Auto Farm loop")
                 AutoFarmConfig.Connections.AutoFarm:Disconnect()
                 AutoFarmConfig.Connections.AutoFarm = nil
             end
@@ -1154,6 +1017,133 @@ local automerge_toggle = TabAutoFarm:CreateToggle({
         end
     end
 }, "AutoMergeToggle")
+
+-- Auto Farm All Enemies in Order toggle
+local autofarm_all_enemies_inorder_toggle = TabAutoFarm:CreateToggle({
+    Name = "Auto Farm All Enemies (In Order)",
+    Description = "Automatically cycles through all enemies in the exact order from the list",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoFarmConfig.AutoFarmAllEnemies = Value
+        
+        if Value then
+            Utilities.Notify("Auto Farm", "Started auto farming all enemies in exact order", "auto_mode")
+            
+            if AutoFarmConfig.Connections.AutoFarmAllEnemiesInOrder then
+                AutoFarmConfig.Connections.AutoFarmAllEnemiesInOrder:Disconnect()
+            end
+            
+            AutoFarmConfig.Connections.AutoFarmAllEnemiesInOrder = spawn(function()
+                local enemyIndex = 1
+                
+                -- Liste aller Gegner in exakter Reihenfolge
+                local allEnemiesInOrder = {
+                    -- Ninja Village
+                    "unstoppable_fist", -- Rock Lee
+                    "copy_ninja", -- Kakashi
+                    "awakened_dark_avenger", -- Sasuke
+                    "awakened_promised_child", -- Naruto Sage Mode
+                    "six_paths_of_pain", -- Pain
+                    "bijuu_beast", -- Naruto Rage Mode (Boss)
+                    
+                    -- Green Village
+                    "ultimate_warrior", -- Son Gohan
+                    "body_switcher", -- Captain Ginyu
+                    "namekian_sage", -- Piccolo
+                    "awakened_prideful_prince", -- Vegeta
+                    "awakened_earth_strongest", -- Goku
+                    "awakened_galactic_tyrant", -- Frieza (Boss)
+                    
+                    -- Shibuya Station
+                    "cursed_doll", -- Nobara
+                    "awakened_shadow_summoner", -- Megumi
+                    "cursed_fist", -- Yuji
+                    "rika_blessing", -- Yuta
+                    "limitless_master", -- Gojo
+                    "king_of_curses", -- Sukuna (Boss)
+                    
+                    -- Titans City
+                    "survey_commander", -- Erwin
+                    "blade_warrior", -- Mikasa
+                    "armored_giant", -- Reiner
+                    "beast_giant", -- Zeke
+                    "blade_captain", -- Levi
+                    "combat_giant", -- Eren (Boss)
+                    
+                    -- Dimensional Fortress
+                    "thunder_demon", -- Kaigaku
+                    "childish_demon", -- Hantengu
+                    "compass_demon", -- Akaza
+                    "awakened_frost_demon", -- Doma
+                    "awakened_six_eyed_slayer", -- Kokushibo
+                    "awakened_pale_demon_lord", -- Muzan (Boss)
+                    
+                    -- Candy Island
+                    "genie_commander", -- Daifuku
+                    "candy_master", -- Perospero
+                    "biscuit_warrior", -- Cracker
+                    "juice_queen", -- Smoothie
+                    "mochi_emperor", -- Katakuri
+                    "soul_queen", -- Big Mom (Boss)
+                    
+                    -- Solo City
+                    "light_saintess", -- Cha Hae-In
+                    "the_goliath", -- Thomas Andre
+                    "shadow_bear", -- Tank
+                    "shadow_commander", -- Igris
+                    "shadow_ant", -- Beru
+                    "awakened_shadow_monarch" -- Sung Jinwoo (Boss)
+                }
+                
+                while AutoFarmConfig.AutoFarmAllEnemies do
+                    local currentEnemy = allEnemiesInOrder[enemyIndex]
+                    
+                    -- Prüfen, ob wir in einem Kampf sind
+                    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+                        -- Prüfen, ob der aktuelle Gegner auf Cooldown ist
+                        local currentTime = os.time()
+                        if not AutoFarmConfig.EnemyCooldowns[currentEnemy] or AutoFarmConfig.EnemyCooldowns[currentEnemy] <= currentTime then
+                            -- Versuchen, den Kampf zu starten
+                            Utilities.StartNextBattle(currentEnemy)
+                            
+                            -- Wenn der Kampf nicht gestartet werden konnte, zum nächsten Gegner wechseln
+                            if not Utilities.IsInBattle() then
+                                enemyIndex = (enemyIndex % #allEnemiesInOrder) + 1
+                            end
+                        else
+                            -- Gegner ist auf Cooldown, zum nächsten wechseln
+                            enemyIndex = (enemyIndex % #allEnemiesInOrder) + 1
+                        end
+                    elseif Utilities.IsInBattle() then
+                        -- Wir sind in einem Kampf, warten
+                        wait(2)
+                    elseif Utilities.IsBattleEnded() then
+                        -- Kampf ist beendet, Endbildschirm schließen
+                        Utilities.DismissBattleEnd()
+                        
+                        -- Nach dem Schließen des Endbildschirms den Gegner als besiegt markieren
+                        if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
+                            Utilities.MarkEnemyDefeated(currentEnemy)
+                            
+                            -- Zum nächsten Gegner wechseln
+                            enemyIndex = (enemyIndex % #allEnemiesInOrder) + 1
+                        end
+                    end
+                    
+                    -- Kurz warten vor der nächsten Überprüfung
+                    wait(1)
+                end
+            end)
+        else
+            Utilities.Notify("Auto Farm", "Stopped auto farming all enemies in order", "stop_circle")
+            
+            if AutoFarmConfig.Connections.AutoFarmAllEnemiesInOrder then
+                AutoFarmConfig.Connections.AutoFarmAllEnemiesInOrder:Disconnect()
+                AutoFarmConfig.Connections.AutoFarmAllEnemiesInOrder = nil
+            end
+        end
+    end
+}, "AutoFarmAllEnemiesInOrderToggle")
 
 -- Towers Tab
 TabTowers:CreateSection("Battle Tower")
@@ -1407,6 +1397,7 @@ TabRaids:CreateParagraph({
 -- Auto Raid Configuration
 local RaidConfig = {
     AutoSummonEternalDragon = false,
+    AutoSummonShadowDragon = false,
     Connections = {}
 }
 
@@ -1419,29 +1410,20 @@ local auto_summon_dragon_toggle = TabRaids:CreateToggle({
         RaidConfig.AutoSummonEternalDragon = Value
         
         if Value then
-            -- Start auto summon
             Utilities.Notify("Auto Raid", "Started auto fighting Eternal Dragon", "security")
             
-            -- Clear previous connections if any
             if RaidConfig.Connections.AutoSummonDragon then
-                Utilities.DebugPrint("Disconnecting previous Auto Summon Dragon connection")
                 RaidConfig.Connections.AutoSummonDragon:Disconnect()
             end
             
-            -- Create new auto summon loop
             RaidConfig.Connections.AutoSummonDragon = spawn(function()
                 while RaidConfig.AutoSummonEternalDragon do
-                    -- Check if we're in battle or at battle end screen
                     if Utilities.IsInBattle() then
-                        Utilities.DebugPrint("Currently in Eternal Dragon battle, waiting...")
-                        wait(2) -- Check less frequently during battle
+                        wait(2)
                     elseif Utilities.IsBattleEnded() then
-                        Utilities.DebugPrint("Eternal Dragon battle ended, dismissing end screen")
                         Utilities.DismissBattleEnd()
-                        wait(1) -- Wait for the dismiss to complete
+                        wait(1)
                     else
-                        -- Not in battle and not at end screen, try to start a new raid
-                        Utilities.DebugPrint("Attempting to start Eternal Dragon raid")
                         pcall(function()
                             local args = {
                                 [1] = "eternal_dragon"
@@ -1449,20 +1431,16 @@ local auto_summon_dragon_toggle = TabRaids:CreateToggle({
                             
                             game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
                         end)
-                        wait(3) -- Wait a bit to see if battle starts
+                        wait(3)
                     end
                     
-                    -- Short wait between checks regardless of outcome
                     wait(1)
                 end
             end)
         else
-            -- Stop auto summon
             Utilities.Notify("Auto Raid", "Stopped auto fighting Eternal Dragon", "stop_circle")
             
-            -- Disconnect auto summon loop
             if RaidConfig.Connections.AutoSummonDragon then
-                Utilities.DebugPrint("Disconnecting Auto Summon Dragon loop")
                 RaidConfig.Connections.AutoSummonDragon:Disconnect()
                 RaidConfig.Connections.AutoSummonDragon = nil
             end
@@ -1490,6 +1468,73 @@ TabRaids:CreateButton({
     end
 })
 
+-- Auto Summon Shadow Dragon toggle
+local auto_summon_shadow_dragon_toggle = TabRaids:CreateToggle({
+    Name = "Auto Fight Shadow Dragon",
+    Description = "Automatically fights the Shadow Dragon at regular intervals",
+    CurrentValue = false,
+    Callback = function(Value)
+        RaidConfig.AutoSummonShadowDragon = Value
+        
+        if Value then
+            Utilities.Notify("Auto Raid", "Started auto fighting Shadow Dragon", "security")
+            
+            if RaidConfig.Connections.AutoSummonShadowDragon then
+                RaidConfig.Connections.AutoSummonShadowDragon:Disconnect()
+            end
+            
+            RaidConfig.Connections.AutoSummonShadowDragon = spawn(function()
+                while RaidConfig.AutoSummonShadowDragon do
+                    if Utilities.IsInBattle() then
+                        wait(2)
+                    elseif Utilities.IsBattleEnded() then
+                        Utilities.DismissBattleEnd()
+                        wait(1)
+                    else
+                        pcall(function()
+                            local args = {
+                                [1] = "shadow_dragon"
+                            }
+                            
+                            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+                        end)
+                        wait(3)
+                    end
+                    
+                    wait(1)
+                end
+            end)
+        else
+            Utilities.Notify("Auto Raid", "Stopped auto fighting Shadow Dragon", "stop_circle")
+            
+            if RaidConfig.Connections.AutoSummonShadowDragon then
+                RaidConfig.Connections.AutoSummonShadowDragon:Disconnect()
+                RaidConfig.Connections.AutoSummonShadowDragon = nil
+            end
+        end
+    end
+}, "AutoSummonShadowDragonToggle")
+
+TabRaids:CreateButton({
+    Name = "Fight Shadow Dragon Once",
+    Description = "Start a raid against the Shadow Dragon immediately",
+    Callback = function()
+        local success, result = pcall(function()
+            local args = {
+                [1] = "shadow_dragon"
+            }
+            
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+        end)
+        
+        if success then
+            Utilities.Notify("Raid Started", "Successfully started fight with Shadow Dragon", "security")
+        else
+            Utilities.Notify("Error", "Failed to start raid", "error")
+        end
+    end
+})
+
 -- Exploration Tab
 TabExploration:CreateSection("Exploration Management")
 
@@ -1497,7 +1542,7 @@ TabExploration:CreateSection("Exploration Management")
 local exploration_difficulty = TabExploration:CreateDropdown({
     Name = "Exploration Difficulty",
     Description = "Select the difficulty level for exploration",
-    Options = {"easy", "medium", "hard"},
+    Options = {"easy", "medium", "hard", "extreme", "nightmare"},
     CurrentOption = {"easy"},
     MultipleOptions = false,
     SpecialType = nil,
@@ -1571,6 +1616,8 @@ local ExplorationConfig = {
     AutoClaimEasy = false,
     AutoClaimMedium = false,
     AutoClaimHard = false,
+    AutoClaimExtreme = false,
+    AutoClaimNightmare = false,
     Connections = {}
 }
 
@@ -1692,7 +1739,6 @@ local auto_claim_hard_toggle = TabExploration:CreateToggle({
                         game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
                     end)
                     
-                    Utilities.DebugPrint("Auto Claiming Hard Exploration Rewards")
                     wait(5) -- Try every 5 seconds
                 end
             end)
@@ -1708,6 +1754,162 @@ local auto_claim_hard_toggle = TabExploration:CreateToggle({
         end
     end
 }, "AutoClaimHardToggle")
+
+-- Auto Claim Extreme Toggle
+local auto_claim_extreme_toggle = TabExploration:CreateToggle({
+    Name = "Auto Claim Extreme Exploration Rewards",
+    Description = "Automatically claims rewards from extreme difficulty explorations",
+    CurrentValue = false,
+    Callback = function(Value)
+        ExplorationConfig.AutoClaimExtreme = Value
+        
+        if Value then
+            Utilities.Notify("Exploration", "Auto Claim Extreme Rewards activated", "redeem")
+            
+            if ExplorationConfig.Connections.AutoClaimExtreme then
+                ExplorationConfig.Connections.AutoClaimExtreme:Disconnect()
+            end
+            
+            ExplorationConfig.Connections.AutoClaimExtreme = spawn(function()
+                while ExplorationConfig.AutoClaimExtreme do
+                    local args = {
+                        [1] = "extreme"
+                    }
+                    
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                    end)
+                    
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
+        else
+            Utilities.Notify("Exploration", "Auto Claim Extreme Rewards deactivated", "stop_circle")
+            
+            if ExplorationConfig.Connections.AutoClaimExtreme then
+                ExplorationConfig.Connections.AutoClaimExtreme:Disconnect()
+                ExplorationConfig.Connections.AutoClaimExtreme = nil
+            end
+        end
+    end
+}, "AutoClaimExtremeToggle")
+
+-- Auto Claim Nightmare Toggle
+local auto_claim_nightmare_toggle = TabExploration:CreateToggle({
+    Name = "Auto Claim Nightmare Exploration Rewards",
+    Description = "Automatically claims rewards from nightmare difficulty explorations",
+    CurrentValue = false,
+    Callback = function(Value)
+        ExplorationConfig.AutoClaimNightmare = Value
+        
+        if Value then
+            Utilities.Notify("Exploration", "Auto Claim Nightmare Rewards activated", "redeem")
+            
+            if ExplorationConfig.Connections.AutoClaimNightmare then
+                ExplorationConfig.Connections.AutoClaimNightmare:Disconnect()
+            end
+            
+            ExplorationConfig.Connections.AutoClaimNightmare = spawn(function()
+                while ExplorationConfig.AutoClaimNightmare do
+                    local args = {
+                        [1] = "nightmare"
+                    }
+                    
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                    end)
+                    
+                    wait(5) -- Try every 5 seconds
+                end
+            end)
+        else
+            Utilities.Notify("Exploration", "Auto Claim Nightmare Rewards deactivated", "stop_circle")
+            
+            if ExplorationConfig.Connections.AutoClaimNightmare then
+                ExplorationConfig.Connections.AutoClaimNightmare:Disconnect()
+                ExplorationConfig.Connections.AutoClaimNightmare = nil
+            end
+        end
+    end
+}, "AutoClaimNightmareToggle")
+
+-- Explore Deployment for extreme
+TabExploration:CreateDivider()
+TabExploration:CreateSection("Extreme & Nightmare Exploration")
+
+TabExploration:CreateButton({
+    Name = "Deploy Extreme Exploration Team",
+    Description = "Send your selected units on an extreme exploration mission",
+    Callback = function()
+        local units_text = exploration_units.CurrentValue
+        local units = {}
+        
+        for unit in string.gmatch(units_text, "[^,]+") do
+            table.insert(units, string.trim(unit))
+        end
+        
+        -- Ensure we have exactly 4 units
+        while #units < 4 do
+            table.insert(units, "dark_avenger")
+        end
+        
+        if #units > 4 then
+            units = {units[1], units[2], units[3], units[4]}
+        end
+        
+        local args = {
+            [1] = "extreme",
+            [2] = units
+        }
+        
+        local success, result = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("569ba6a6-d5ea-488e-b729-0f0b6dbaf40c"):FireServer(unpack(args))
+        end)
+        
+        if success then
+            Utilities.Notify("Exploration", "Deployed team for extreme exploration", "explore")
+        else
+            Utilities.Notify("Error", "Failed to deploy exploration team", "error")
+        end
+    end
+})
+
+TabExploration:CreateButton({
+    Name = "Deploy Nightmare Exploration Team",
+    Description = "Send your selected units on a nightmare exploration mission",
+    Callback = function()
+        local units_text = exploration_units.CurrentValue
+        local units = {}
+        
+        for unit in string.gmatch(units_text, "[^,]+") do
+            table.insert(units, string.trim(unit))
+        end
+        
+        -- Ensure we have exactly 4 units
+        while #units < 4 do
+            table.insert(units, "dark_avenger")
+        end
+        
+        if #units > 4 then
+            units = {units[1], units[2], units[3], units[4]}
+        end
+        
+        local args = {
+            [1] = "nightmare",
+            [2] = units
+        }
+        
+        local success, result = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("569ba6a6-d5ea-488e-b729-0f0b6dbaf40c"):FireServer(unpack(args))
+        end)
+        
+        if success then
+            Utilities.Notify("Exploration", "Deployed team for nightmare exploration", "explore")
+        else
+            Utilities.Notify("Error", "Failed to deploy exploration team", "error")
+        end
+    end
+})
 
 -- Shop Tab
 TabShop:CreateSection("Shop Management")
@@ -1849,8 +2051,6 @@ Utilities.ToggleNameHide = function(value)
                     mythLabel.Text = "MYTHHUB"
                     mythLabel.TextColor3 = Color3.fromRGB(17, 24, 157) -- #11189D in RGB
                 end
-                
-                Utilities.DebugPrint("Name hide enabled, texts changed")
             end)
         else
             -- Apply saved changes (in case they were reverted)
@@ -1860,8 +2060,6 @@ Utilities.ToggleNameHide = function(value)
                 
                 workspace.rswhshj.Head.BillboardGui.Frame.TextLabel.Text = "MYTHHUB"
                 workspace.rswhshj.Head.BillboardGui.Frame.TextLabel.TextColor3 = Color3.fromRGB(17, 24, 157)
-                
-                Utilities.DebugPrint("Name hide re-enabled, texts restored to hidden values")
             end)
         end
     else
@@ -1872,7 +2070,6 @@ Utilities.ToggleNameHide = function(value)
                 label.TextColor3 = NameHideConfig.OriginalColors[label]
             end)
         end
-        Utilities.DebugPrint("Name hide disabled, restored original text")
     end
 end
 
@@ -1892,16 +2089,269 @@ local hide_name_toggle = TabMisc:CreateToggle({
     end
 }, "HideNameToggle")
 
--- Enemy Cooldown Display
+-- Remove the "Enemy Cooldown Information" section and replace with a detailed cooldown display
 TabMisc:CreateSection("Enemy Cooldown Information")
 
-local enemy_cooldown_info = TabMisc:CreateParagraph({
-    Title = "Enemy Cooldown",
-    Text = "All enemies have a 10-minute cooldown after defeating them, including bosses."
+-- Create a function to display enemy cooldowns
+local function createCooldownDisplay()
+    -- Create the main paragraph for cooldowns
+    local cooldownParagraph = TabMisc:CreateParagraph({
+        Title = "Current Enemy Cooldowns",
+        Text = "Checking cooldowns..."
+    })
+    
+    -- Update function that will be called periodically
+    local function updateCooldowns()
+        local text = ""
+        local currentTime = os.time()
+        local hasCooldowns = false
+        
+        -- Check existence of EnemyCooldowns table
+        if not AutoFarmConfig.EnemyCooldowns then
+            AutoFarmConfig.EnemyCooldowns = {}
+        end
+        
+        -- Boss names
+        local worldBosses = {
+            bijuu_beast = "Naruto Rage Mode",
+            awakened_galactic_tyrant = "Frieza",
+            king_of_curses = "Sukuna",
+            combat_giant = "Eren",
+            awakened_pale_demon_lord = "Muzan",
+            soul_queen = "Big Mom",
+            awakened_shadow_monarch = "Sung Jinwoo"
+        }
+        
+        -- Regular enemy names
+        local regularEnemies = {
+            -- Ninja Village
+            unstoppable_fist = "Rock Lee",
+            copy_ninja = "Kakashi",
+            awakened_dark_avenger = "Sasuke",
+            awakened_promised_child = "Naruto Sage Mode",
+            six_paths_of_pain = "Pain",
+            
+            -- Green Village
+            ultimate_warrior = "Son Gohan",
+            body_switcher = "Captain Ginyu",
+            namekian_sage = "Piccolo",
+            awakened_prideful_prince = "Vegeta",
+            awakened_earth_strongest = "Goku",
+            
+            -- Shibuya Station
+            cursed_doll = "Nobara",
+            awakened_shadow_summoner = "Megumi",
+            cursed_fist = "Yuji",
+            rika_blessing = "Yuta",
+            limitless_master = "Gojo",
+            
+            -- Titans City
+            survey_commander = "Erwin",
+            blade_warrior = "Mikasa",
+            armored_giant = "Reiner",
+            beast_giant = "Zeke",
+            blade_captain = "Levi",
+            
+            -- Dimensional Fortress
+            thunder_demon = "Kaigaku",
+            childish_demon = "Hantengu",
+            compass_demon = "Akaza",
+            awakened_frost_demon = "Doma",
+            awakened_six_eyed_slayer = "Kokushibo",
+            
+            -- Candy Island
+            genie_commander = "Daifuku",
+            candy_master = "Perospero",
+            biscuit_warrior = "Cracker",
+            juice_queen = "Smoothie",
+            mochi_emperor = "Katakuri",
+            
+            -- Solo City
+            light_saintess = "Cha Hae-In",
+            the_goliath = "Thomas Andre",
+            shadow_bear = "Tank",
+            shadow_commander = "Igris",
+            shadow_ant = "Beru"
+        }
+        
+        -- Add world bosses to cooldown display
+        text = text .. "--- World Bosses ---\n"
+        for enemyCode, bossName in pairs(worldBosses) do
+            local cooldownTime = AutoFarmConfig.EnemyCooldowns[enemyCode]
+            if cooldownTime and cooldownTime > currentTime then
+                local remainingTime = cooldownTime - currentTime
+                local minutes = math.floor(remainingTime / 60)
+                local seconds = remainingTime % 60
+                text = text .. bossName .. ": " .. string.format("%02d:%02d", minutes, seconds) .. "\n"
+                hasCooldowns = true
+            else
+                text = text .. bossName .. ": Ready\n"
+            end
+        end
+        
+        -- Add regular enemies to cooldown display
+        text = text .. "\n--- Regular Enemies ---\n"
+        for enemyCode, enemyName in pairs(regularEnemies) do
+            local cooldownTime = AutoFarmConfig.EnemyCooldowns[enemyCode]
+            if cooldownTime and cooldownTime > currentTime then
+                local remainingTime = cooldownTime - currentTime
+                local minutes = math.floor(remainingTime / 60)
+                local seconds = remainingTime % 60
+                text = text .. enemyName .. ": " .. string.format("%02d:%02d", minutes, seconds) .. "\n"
+                hasCooldowns = true
+            end
+        end
+        
+        if not hasCooldowns then
+            text = text .. "No enemies on cooldown."
+        end
+        
+        -- Update the paragraph text
+        cooldownParagraph:Set({
+            Text = text
+        })
+    end
+    
+    -- Initial update
+    updateCooldowns()
+    
+    -- Start a timer to update the cooldowns every second
+    spawn(function()
+        while wait(1) do
+            updateCooldowns()
+        end
+    end)
+end
+
+-- Create the cooldown display
+createCooldownDisplay()
+
+TabMisc:CreateDivider()
+
+-- Create a section for Performance Optimization in the Misc Tab
+TabMisc:CreateSection("Performance Optimization")
+
+-- FPS Boost
+TabMisc:CreateToggle({
+    Name = "FPS Boost",
+    Description = "Reduces graphics quality to increase performance",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            -- Enable FPS Boost
+            pcall(function()
+                -- Reduce graphics quality
+                local lighting = game:GetService("Lighting")
+                lighting.GlobalShadows = false
+                lighting.ShadowSoftness = 0
+                lighting.Technology = Enum.Technology.Compatibility
+                
+                -- Disable unnecessary rendering
+                settings().Rendering.QualityLevel = 1
+                
+                -- Reduce terrain quality
+                workspace.Terrain.WaterWaveSize = 0
+                workspace.Terrain.WaterWaveSpeed = 0
+                workspace.Terrain.WaterReflectance = 0
+                workspace.Terrain.WaterTransparency = 0
+                
+                -- Disable textures and effects
+                for _, v in pairs(workspace:GetDescendants()) do
+                    if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") then
+                        v.Enabled = false
+                    end
+                end
+                
+                Utilities.Notify("Performance", "FPS Boost enabled", "speed")
+            end)
+        else
+            -- Restore default settings
+            pcall(function()
+                -- Reset graphics quality
+                local lighting = game:GetService("Lighting")
+                lighting.GlobalShadows = true
+                lighting.ShadowSoftness = 0.5
+                lighting.Technology = Enum.Technology.Future
+                
+                -- Reset rendering
+                settings().Rendering.QualityLevel = 7
+                
+                -- Reset terrain
+                workspace.Terrain.WaterWaveSize = 0.3
+                workspace.Terrain.WaterWaveSpeed = 10
+                workspace.Terrain.WaterReflectance = 1
+                workspace.Terrain.WaterTransparency = 0.6
+                
+                Utilities.Notify("Performance", "FPS Boost disabled", "speed")
+            end)
+        end
+    end
 })
 
--- Stats upgrade section
-TabMisc:CreateSection("Stats Upgrade")
+-- Reduce Particles
+TabMisc:CreateToggle({
+    Name = "Reduce Particles",
+    Description = "Disables particle effects for better performance",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            -- Disable particles
+            pcall(function()
+                for _, v in pairs(game:GetDescendants()) do
+                    if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") then
+                        v.Enabled = false
+                    end
+                end
+                
+                -- Connect to DescendantAdded to disable new particles
+                if not Utilities.ParticleConnection then
+                    Utilities.ParticleConnection = game.DescendantAdded:Connect(function(descendant)
+                        if descendant:IsA("ParticleEmitter") or descendant:IsA("Beam") or descendant:IsA("Trail") or descendant:IsA("Smoke") or descendant:IsA("Fire") then
+                            descendant.Enabled = false
+                        end
+                    end)
+                end
+                
+                Utilities.Notify("Performance", "Particles reduced", "blur_off")
+            end)
+        else
+            -- Enable particles again
+            pcall(function()
+                if Utilities.ParticleConnection then
+                    Utilities.ParticleConnection:Disconnect()
+                    Utilities.ParticleConnection = nil
+                end
+                
+                Utilities.Notify("Performance", "Particles enabled", "blur_on")
+            end)
+        end
+    end
+})
+
+-- Remove Shadows
+TabMisc:CreateToggle({
+    Name = "Remove Shadows",
+    Description = "Disables shadows for better performance",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            pcall(function()
+                game:GetService("Lighting").GlobalShadows = false
+                game:GetService("Lighting").ShadowSoftness = 0
+                Utilities.Notify("Performance", "Shadows disabled", "visibility_off")
+            end)
+        else
+            pcall(function()
+                game:GetService("Lighting").GlobalShadows = true
+                game:GetService("Lighting").ShadowSoftness = 0.5
+                Utilities.Notify("Performance", "Shadows enabled", "visibility")
+            end)
+        end
+    end
+})
+
+TabMisc:CreateDivider()
+TabMisc:CreateSection("Auto Stats Upgrade")
 
 -- Auto Stats Configuration
 local AutoStatsConfig = {
@@ -1922,15 +2372,12 @@ local auto_upgrade_luck_toggle = TabMisc:CreateToggle({
         AutoStatsConfig.AutoUpgradeLuck = Value
         
         if Value then
-            -- Start auto upgrade
             Utilities.Notify("Auto Stats", "Started auto upgrading Luck stat", "trending_up")
             
-            -- Clear previous connections if any
             if AutoStatsConfig.Connections.AutoUpgradeLuck then
                 AutoStatsConfig.Connections.AutoUpgradeLuck:Disconnect()
             end
             
-            -- Create new auto upgrade loop
             AutoStatsConfig.Connections.AutoUpgradeLuck = spawn(function()
                 while AutoStatsConfig.AutoUpgradeLuck do
                     Utilities.UpgradeStat("LUCK")
@@ -1938,10 +2385,8 @@ local auto_upgrade_luck_toggle = TabMisc:CreateToggle({
                 end
             end)
         else
-            -- Stop auto upgrade
             Utilities.Notify("Auto Stats", "Stopped auto upgrading Luck stat", "stop_circle")
             
-            -- Disconnect auto upgrade loop
             if AutoStatsConfig.Connections.AutoUpgradeLuck then
                 AutoStatsConfig.Connections.AutoUpgradeLuck:Disconnect()
                 AutoStatsConfig.Connections.AutoUpgradeLuck = nil
@@ -1959,15 +2404,12 @@ local auto_upgrade_cooldown_toggle = TabMisc:CreateToggle({
         AutoStatsConfig.AutoUpgradeCooldownReduction = Value
         
         if Value then
-            -- Start auto upgrade
             Utilities.Notify("Auto Stats", "Started auto upgrading Cooldown Reduction stat", "trending_up")
             
-            -- Clear previous connections if any
             if AutoStatsConfig.Connections.AutoUpgradeCooldownReduction then
                 AutoStatsConfig.Connections.AutoUpgradeCooldownReduction:Disconnect()
             end
             
-            -- Create new auto upgrade loop
             AutoStatsConfig.Connections.AutoUpgradeCooldownReduction = spawn(function()
                 while AutoStatsConfig.AutoUpgradeCooldownReduction do
                     Utilities.UpgradeStat("COOLDOWN_REDUCTION")
@@ -1975,10 +2417,8 @@ local auto_upgrade_cooldown_toggle = TabMisc:CreateToggle({
                 end
             end)
         else
-            -- Stop auto upgrade
             Utilities.Notify("Auto Stats", "Stopped auto upgrading Cooldown Reduction stat", "stop_circle")
             
-            -- Disconnect auto upgrade loop
             if AutoStatsConfig.Connections.AutoUpgradeCooldownReduction then
                 AutoStatsConfig.Connections.AutoUpgradeCooldownReduction:Disconnect()
                 AutoStatsConfig.Connections.AutoUpgradeCooldownReduction = nil
@@ -1996,15 +2436,12 @@ local auto_upgrade_potion_toggle = TabMisc:CreateToggle({
         AutoStatsConfig.AutoUpgradePotionDuration = Value
         
         if Value then
-            -- Start auto upgrade
             Utilities.Notify("Auto Stats", "Started auto upgrading Potion Duration stat", "trending_up")
             
-            -- Clear previous connections if any
             if AutoStatsConfig.Connections.AutoUpgradePotionDuration then
                 AutoStatsConfig.Connections.AutoUpgradePotionDuration:Disconnect()
             end
             
-            -- Create new auto upgrade loop
             AutoStatsConfig.Connections.AutoUpgradePotionDuration = spawn(function()
                 while AutoStatsConfig.AutoUpgradePotionDuration do
                     Utilities.UpgradeStat("POTION_DURATION")
@@ -2012,10 +2449,8 @@ local auto_upgrade_potion_toggle = TabMisc:CreateToggle({
                 end
             end)
         else
-            -- Stop auto upgrade
             Utilities.Notify("Auto Stats", "Stopped auto upgrading Potion Duration stat", "stop_circle")
             
-            -- Disconnect auto upgrade loop
             if AutoStatsConfig.Connections.AutoUpgradePotionDuration then
                 AutoStatsConfig.Connections.AutoUpgradePotionDuration:Disconnect()
                 AutoStatsConfig.Connections.AutoUpgradePotionDuration = nil
@@ -2033,15 +2468,12 @@ local auto_upgrade_border_toggle = TabMisc:CreateToggle({
         AutoStatsConfig.AutoUpgradeBorderChance = Value
         
         if Value then
-            -- Start auto upgrade
             Utilities.Notify("Auto Stats", "Started auto upgrading Border Chance stat", "trending_up")
             
-            -- Clear previous connections if any
             if AutoStatsConfig.Connections.AutoUpgradeBorderChance then
                 AutoStatsConfig.Connections.AutoUpgradeBorderChance:Disconnect()
             end
             
-            -- Create new auto upgrade loop
             AutoStatsConfig.Connections.AutoUpgradeBorderChance = spawn(function()
                 while AutoStatsConfig.AutoUpgradeBorderChance do
                     Utilities.UpgradeStat("BORDER_CHANCE")
@@ -2049,10 +2481,8 @@ local auto_upgrade_border_toggle = TabMisc:CreateToggle({
                 end
             end)
         else
-            -- Stop auto upgrade
             Utilities.Notify("Auto Stats", "Stopped auto upgrading Border Chance stat", "stop_circle")
             
-            -- Disconnect auto upgrade loop
             if AutoStatsConfig.Connections.AutoUpgradeBorderChance then
                 AutoStatsConfig.Connections.AutoUpgradeBorderChance:Disconnect()
                 AutoStatsConfig.Connections.AutoUpgradeBorderChance = nil
@@ -2070,15 +2500,12 @@ local auto_upgrade_boss_toggle = TabMisc:CreateToggle({
         AutoStatsConfig.AutoUpgradeBossChance = Value
         
         if Value then
-            -- Start auto upgrade
             Utilities.Notify("Auto Stats", "Started auto upgrading Boss Chance stat", "trending_up")
             
-            -- Clear previous connections if any
             if AutoStatsConfig.Connections.AutoUpgradeBossChance then
                 AutoStatsConfig.Connections.AutoUpgradeBossChance:Disconnect()
             end
             
-            -- Create new auto upgrade loop
             AutoStatsConfig.Connections.AutoUpgradeBossChance = spawn(function()
                 while AutoStatsConfig.AutoUpgradeBossChance do
                     Utilities.UpgradeStat("BOSS_CHANCE")
@@ -2086,10 +2513,8 @@ local auto_upgrade_boss_toggle = TabMisc:CreateToggle({
                 end
             end)
         else
-            -- Stop auto upgrade
             Utilities.Notify("Auto Stats", "Stopped auto upgrading Boss Chance stat", "stop_circle")
             
-            -- Disconnect auto upgrade loop
             if AutoStatsConfig.Connections.AutoUpgradeBossChance then
                 AutoStatsConfig.Connections.AutoUpgradeBossChance:Disconnect()
                 AutoStatsConfig.Connections.AutoUpgradeBossChance = nil
@@ -2098,47 +2523,6 @@ local auto_upgrade_boss_toggle = TabMisc:CreateToggle({
     end
 }, "AutoUpgradeBossToggle")
 
--- Manual upgrade buttons
-TabMisc:CreateButton({
-    Name = "Upgrade Luck (Once)",
-    Description = "Upgrade your luck stat once",
-    Callback = function()
-        Utilities.UpgradeStat("LUCK")
-    end
-})
-
-TabMisc:CreateButton({
-    Name = "Upgrade Cooldown Reduction (Once)",
-    Description = "Upgrade your cooldown reduction stat once",
-    Callback = function()
-        Utilities.UpgradeStat("COOLDOWN_REDUCTION")
-    end
-})
-
-TabMisc:CreateButton({
-    Name = "Upgrade Potion Duration (Once)",
-    Description = "Upgrade your potion duration stat once",
-    Callback = function()
-        Utilities.UpgradeStat("POTION_DURATION")
-    end
-})
-
-TabMisc:CreateButton({
-    Name = "Upgrade Border Chance (Once)",
-    Description = "Upgrade your border chance stat once",
-    Callback = function()
-        Utilities.UpgradeStat("BORDER_CHANCE")
-    end
-})
-
-TabMisc:CreateButton({
-    Name = "Upgrade Boss Chance (Once)",
-    Description = "Upgrade your boss chance stat once",
-    Callback = function()
-        Utilities.UpgradeStat("BOSS_CHANCE")
-    end
-})
-
 -- Theme and Config sections
 TabSettings:BuildThemeSection()
 TabSettings:BuildConfigSection()
@@ -2146,180 +2530,32 @@ TabSettings:BuildConfigSection()
 -- Enable autoload config
 Luna:LoadAutoloadConfig()
 
--- Add debug console to the game
-Utilities.CreateDebugConsole = function()
-    Utilities.DebugPrint("Attempting to create debug console GUI")
-    
-    -- Check if console already exists
-    local player = Utilities.GetLocalPlayer()
-    if player and player.PlayerGui and player.PlayerGui:FindFirstChild("MythHubConsole") then
-        Utilities.DebugPrint("Debug console already exists, not creating a new one")
-        return
-    end
-    
-    -- Create console GUI
-    pcall(function()
-        local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "MythHubConsole"
-        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        screenGui.ResetOnSpawn = false
-        
-        local frame = Instance.new("Frame")
-        frame.Name = "ConsoleFrame"
-        frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        frame.BackgroundTransparency = 0.2
-        frame.BorderSizePixel = 0
-        frame.Position = UDim2.new(0, 10, 0, 10)
-        frame.Size = UDim2.new(0, 400, 0, 300)
-        frame.Parent = screenGui
-        
-        local title = Instance.new("TextLabel")
-        title.Name = "Title"
-        title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        title.BackgroundTransparency = 0.2
-        title.BorderSizePixel = 0
-        title.Size = UDim2.new(1, 0, 0, 30)
-        title.Font = Enum.Font.SourceSansBold
-        title.Text = "MythHub Debug Console"
-        title.TextColor3 = Color3.fromRGB(255, 255, 255)
-        title.TextSize = 18
-        title.Parent = frame
-        
-        local closeButton = Instance.new("TextButton")
-        closeButton.Name = "CloseButton"
-        closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        closeButton.BorderSizePixel = 0
-        closeButton.Position = UDim2.new(1, -25, 0, 5)
-        closeButton.Size = UDim2.new(0, 20, 0, 20)
-        closeButton.Font = Enum.Font.SourceSansBold
-        closeButton.Text = "X"
-        closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        closeButton.TextSize = 14
-        closeButton.Parent = title
-        
-        local console = Instance.new("ScrollingFrame")
-        console.Name = "Console"
-        console.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        console.BackgroundTransparency = 0
-        console.BorderSizePixel = 0
-        console.Position = UDim2.new(0, 5, 0, 35)
-        console.Size = UDim2.new(1, -10, 1, -40)
-        console.CanvasSize = UDim2.new(0, 0, 0, 0)
-        console.ScrollBarThickness = 8
-        console.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        console.ScrollingDirection = Enum.ScrollingDirection.Y
-        console.Parent = frame
-        
-        local text = Instance.new("TextLabel")
-        text.Name = "Text"
-        text.BackgroundTransparency = 1
-        text.Position = UDim2.new(0, 5, 0, 5)
-        text.Size = UDim2.new(1, -18, 0, 1000)
-        text.CanvasSize = UDim2.new(0, 0, 0, 1000)
-        text.Font = Enum.Font.SourceSans
-        text.Text = "-- MythHub Debug Console Initialized --"
-        text.TextColor3 = Color3.fromRGB(200, 200, 200)
-        text.TextSize = 14
-        text.TextXAlignment = Enum.TextXAlignment.Left
-        text.TextYAlignment = Enum.TextYAlignment.Top
-        text.TextWrapped = true
-        text.Parent = console
-        
-        -- Make the console draggable
-        local dragging
-        local dragInput
-        local dragStart
-        local startPos
-        
-        local function update(input)
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-        
-        title.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
-                dragStart = input.Position
-                startPos = frame.Position
-                
-                input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then
-                        dragging = false
-                    end
-                end)
-            end
-        end)
-        
-        title.InputChanged:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                dragInput = input
-            end
-        end)
-        
-        game:GetService("UserInputService").InputChanged:Connect(function(input)
-            if input == dragInput and dragging then
-                update(input)
-            end
-        end)
-        
-        closeButton.MouseButton1Click:Connect(function()
-            screenGui.Enabled = false
-        end)
-        
-        screenGui.Parent = player.PlayerGui
-        Utilities.DebugPrint("Debug console created successfully")
-    end)
-end
+-- Remove Debug Console creation
+Utilities.CreateDebugConsole = nil
 
--- Initialize debug console when script loads
-spawn(function()
-    wait(1) -- Wait a bit to ensure player is loaded
-    Utilities.CreateDebugConsole()
-end)
-
--- Create button to toggle console visibility in settings
+-- Remove Debug Console toggle from settings
 TabSettings:CreateButton({
     Name = "Toggle Debug Console",
     Description = "Show or hide the debug console",
     Callback = function()
-        local player = Utilities.GetLocalPlayer()
-        if player and player.PlayerGui then
-            local console = player.PlayerGui:FindFirstChild("MythHubConsole")
-            if console then
-                console.Enabled = not console.Enabled
-                Utilities.Notify("Debug Console", console.Enabled and "Console shown" or "Console hidden", "settings")
-            else
-                Utilities.CreateDebugConsole()
-                Utilities.Notify("Debug Console", "Console created", "settings")
-            end
-        end
+        -- Do nothing, debug console removed
     end
 })
 
 -- Add global battle end detection loop
 spawn(function()
-    Utilities.DebugPrint("Starting global battle end detection loop")
     while true do
-        wait(1) -- Check every second
+        wait(1)
         
-        -- Check if battle just ended
         if Utilities.IsBattleEnded() then
-            Utilities.DebugPrint("Battle end detected by global monitor, dismissing automatically")
             Utilities.DismissBattleEnd()
             
-            -- If not in an auto farm mode, still mark the last enemy as defeated
             if not AutoFarmConfig.Enabled and not AutoFarmConfig.AutoFarmAllWorldBosses and not AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds then
-                Utilities.DebugPrint("Not in auto farm mode, but still recording cooldown for last enemy")
-                Utilities.EnsureEnemyCooldownsInitialized()
-                
-                -- Try to determine which enemy was defeated based on current world
                 local possibleLastEnemy = nil
                 
-                -- If we were in a raid, it might be the Eternal Dragon
-                if game.PlaceId == 9230754391 then -- Raid place ID
+                if game.PlaceId == 9230754391 then
                     possibleLastEnemy = "eternal_dragon"
                 else
-                    -- Otherwise, use the current enemy from the AutoFarm settings if available
                     possibleLastEnemy = AutoFarmConfig.CurrentEnemy
                 end
                 
@@ -2334,26 +2570,39 @@ end)
 -- Enable autoload config
 Luna:LoadAutoloadConfig()
 
--- Add Anti-AFK function (no GUI)
+-- Add Anti-AFK function
 spawn(function()
-    Utilities.DebugPrint("Starting Anti-AFK system")
-    
-    -- Get VirtualUser service
     local VirtualUser = game:GetService("VirtualUser")
     
-    -- Connect to the Idled event
     Utilities.GetLocalPlayer().Idled:Connect(function()
-        Utilities.DebugPrint("AFK kick prevention activated")
-        
-        -- Simulate input to prevent being kicked
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
-        
-        -- Notify the user
-        Utilities.Notify("Anti-AFK", "Prevented AFK kick", "timer")
-        
-        Utilities.DebugPrint("Successfully prevented AFK kick")
     end)
-    
-    Utilities.DebugPrint("Anti-AFK system successfully initialized")
 end)
+
+-- Function to upgrade stats
+Utilities.UpgradeStat = function(statType)
+    if not statType then return end
+    
+    local args = {
+        [1] = statType
+    }
+    
+    pcall(function()
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("af785685-b79a-4491-8d84-e3b637aa6fc5"):FireServer(unpack(args))
+    end)
+end
+
+-- Function to buy shop items
+Utilities.BuyShopItem = function(itemName, amount)
+    if not itemName or not amount then return end
+    
+    local args = {
+        [1] = itemName,
+        [2] = amount
+    }
+    
+    pcall(function()
+        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("54f5f951-af4e-447d-9ee4-c63d9130fe77"):FireServer(unpack(args))
+    end)
+end
