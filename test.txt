@@ -1424,21 +1424,36 @@ local auto_summon_dragon_toggle = TabRaids:CreateToggle({
             
             -- Clear previous connections if any
             if RaidConfig.Connections.AutoSummonDragon then
+                Utilities.DebugPrint("Disconnecting previous Auto Summon Dragon connection")
                 RaidConfig.Connections.AutoSummonDragon:Disconnect()
             end
             
             -- Create new auto summon loop
             RaidConfig.Connections.AutoSummonDragon = spawn(function()
                 while RaidConfig.AutoSummonEternalDragon do
-                    pcall(function()
-                        local args = {
-                            [1] = "eternal_dragon"
-                        }
-                        
-                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
-                    end)
+                    -- Check if we're in battle or at battle end screen
+                    if Utilities.IsInBattle() then
+                        Utilities.DebugPrint("Currently in Eternal Dragon battle, waiting...")
+                        wait(2) -- Check less frequently during battle
+                    elseif Utilities.IsBattleEnded() then
+                        Utilities.DebugPrint("Eternal Dragon battle ended, dismissing end screen")
+                        Utilities.DismissBattleEnd()
+                        wait(1) -- Wait for the dismiss to complete
+                    else
+                        -- Not in battle and not at end screen, try to start a new raid
+                        Utilities.DebugPrint("Attempting to start Eternal Dragon raid")
+                        pcall(function()
+                            local args = {
+                                [1] = "eternal_dragon"
+                            }
+                            
+                            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+                        end)
+                        wait(3) -- Wait a bit to see if battle starts
+                    end
                     
-                    wait(AutoFarmConfig.Interval) -- Use the same cooldown as auto farm
+                    -- Short wait between checks regardless of outcome
+                    wait(1)
                 end
             end)
         else
@@ -1447,6 +1462,7 @@ local auto_summon_dragon_toggle = TabRaids:CreateToggle({
             
             -- Disconnect auto summon loop
             if RaidConfig.Connections.AutoSummonDragon then
+                Utilities.DebugPrint("Disconnecting Auto Summon Dragon loop")
                 RaidConfig.Connections.AutoSummonDragon:Disconnect()
                 RaidConfig.Connections.AutoSummonDragon = nil
             end
@@ -1796,6 +1812,85 @@ TabShop:CreateButton({
 
 -- Misc Tab
 TabMisc:CreateSection("Miscellaneous Features")
+
+-- BillboardGui text modification (Hide Name feature)
+local NameHideConfig = {
+    Enabled = false,
+    OriginalTexts = {},
+    OriginalColors = {}
+}
+
+-- Function to toggle name hiding
+Utilities.ToggleNameHide = function(value)
+    NameHideConfig.Enabled = value
+    
+    if value then
+        -- Save original values first (only if not already saved)
+        if #NameHideConfig.OriginalTexts == 0 then
+            pcall(function()
+                -- First TextLabel (which will be changed to "JOIN DC")
+                local joinLabel = workspace.rswhshj.Head.BillboardGui.Frame:GetChildren()[2]
+                if joinLabel and joinLabel:IsA("TextLabel") then
+                    NameHideConfig.OriginalTexts[joinLabel] = joinLabel.Text
+                    NameHideConfig.OriginalColors[joinLabel] = joinLabel.TextColor3
+                    
+                    -- Change to "JOIN DC" in white
+                    joinLabel.Text = "JOIN DC"
+                    joinLabel.TextColor3 = Color3.fromRGB(255, 255, 255) -- White
+                end
+                
+                -- Second TextLabel (which will be changed to "MYTHHUB")
+                local mythLabel = workspace.rswhshj.Head.BillboardGui.Frame.TextLabel
+                if mythLabel and mythLabel:IsA("TextLabel") then
+                    NameHideConfig.OriginalTexts[mythLabel] = mythLabel.Text
+                    NameHideConfig.OriginalColors[mythLabel] = mythLabel.TextColor3
+                    
+                    -- Change to "MYTHHUB" in #11189D (dark blue)
+                    mythLabel.Text = "MYTHHUB"
+                    mythLabel.TextColor3 = Color3.fromRGB(17, 24, 157) -- #11189D in RGB
+                end
+                
+                Utilities.DebugPrint("Name hide enabled, texts changed")
+            end)
+        else
+            -- Apply saved changes (in case they were reverted)
+            pcall(function()
+                workspace.rswhshj.Head.BillboardGui.Frame:GetChildren()[2].Text = "JOIN DC"
+                workspace.rswhshj.Head.BillboardGui.Frame:GetChildren()[2].TextColor3 = Color3.fromRGB(255, 255, 255)
+                
+                workspace.rswhshj.Head.BillboardGui.Frame.TextLabel.Text = "MYTHHUB"
+                workspace.rswhshj.Head.BillboardGui.Frame.TextLabel.TextColor3 = Color3.fromRGB(17, 24, 157)
+                
+                Utilities.DebugPrint("Name hide re-enabled, texts restored to hidden values")
+            end)
+        end
+    else
+        -- Restore original values
+        for label, originalText in pairs(NameHideConfig.OriginalTexts) do
+            pcall(function()
+                label.Text = originalText
+                label.TextColor3 = NameHideConfig.OriginalColors[label]
+            end)
+        end
+        Utilities.DebugPrint("Name hide disabled, restored original text")
+    end
+end
+
+-- Add Hide Name toggle
+local hide_name_toggle = TabMisc:CreateToggle({
+    Name = "Hide Name",
+    Description = "Replaces the name with MYTHHUB and JOIN DC text",
+    CurrentValue = false,
+    Callback = function(Value)
+        Utilities.ToggleNameHide(Value)
+        
+        if Value then
+            Utilities.Notify("Name Hider", "Name hidden with custom text", "person")
+        else
+            Utilities.Notify("Name Hider", "Original name restored", "person")
+        end
+    end
+}, "HideNameToggle")
 
 -- Enemy Cooldown Display
 TabMisc:CreateSection("Enemy Cooldown Information")
