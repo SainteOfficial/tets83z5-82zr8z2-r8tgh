@@ -2164,3 +2164,27 @@ end)
 
 -- Enable autoload config
 Luna:LoadAutoloadConfig()
+
+-- Add Anti-AFK function (no GUI)
+spawn(function()
+    Utilities.DebugPrint("Starting Anti-AFK system")
+    
+    -- Get VirtualUser service
+    local VirtualUser = game:GetService("VirtualUser")
+    
+    -- Connect to the Idled event
+    Utilities.GetLocalPlayer().Idled:Connect(function()
+        Utilities.DebugPrint("AFK kick prevention activated")
+        
+        -- Simulate input to prevent being kicked
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+        
+        -- Notify the user
+        Utilities.Notify("Anti-AFK", "Prevented AFK kick", "timer")
+        
+        Utilities.DebugPrint("Successfully prevented AFK kick")
+    end)
+    
+    Utilities.DebugPrint("Anti-AFK system successfully initialized")
+end)
