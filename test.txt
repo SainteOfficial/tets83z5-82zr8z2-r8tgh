@@ -206,7 +206,7 @@ Utilities.DismissBattleEnd = function()
         Utilities.DebugPrint("Starting to click M1 to dismiss Battle-End")
         while Utilities.IsBattleEnded() and attempts < maxAttempts do
             Utilities.DebugPrint("Click attempt " .. attempts+1 .. "/" .. maxAttempts)
-            Utilities.ClickM1(5) -- Try 5 clicks each iteration
+            Utilities.ClickM1(3) -- Try 3 clicks each iteration, changed from 5
             wait(0.5)
             attempts = attempts + 1
         end
@@ -244,6 +244,63 @@ local AutoFarmConfig = {
         "awakened_pale_demon_lord", -- Muzan
         "soul_queen",            -- Big Mom
         "awakened_shadow_monarch"  -- Sung Jinwoo
+    },
+    AllEnemies = {
+        -- Ninja Village
+        "unstoppable_fist", -- Rock Lee
+        "copy_ninja", -- Kakashi
+        "awakened_dark_avenger", -- Sasuke
+        "awakened_promised_child", -- Naruto Sage Mode
+        "six_paths_of_pain", -- Pain
+        "bijuu_beast", -- Naruto Rage Mode (Boss)
+        
+        -- Green Village
+        "ultimate_warrior", -- Son Gohan
+        "body_switcher", -- Captain Ginyu
+        "namekian_sage", -- Piccolo
+        "awakened_prideful_prince", -- Vegeta
+        "awakened_earth_strongest", -- Goku
+        "awakened_galactic_tyrant", -- Frieza (Boss)
+        
+        -- Shibuya Station
+        "cursed_doll", -- Nobara
+        "awakened_shadow_summoner", -- Megumi
+        "cursed_fist", -- Yuji
+        "rika_blessing", -- Yuta
+        "limitless_master", -- Gojo
+        "king_of_curses", -- Sukuna (Boss)
+        
+        -- Titans City
+        "survey_commander", -- Erwin
+        "blade_warrior", -- Mikasa
+        "armored_giant", -- Reiner
+        "beast_giant", -- Zeke
+        "blade_captain", -- Levi
+        "combat_giant", -- Eren (Boss)
+        
+        -- Dimensional Fortress
+        "thunder_demon", -- Kaigaku
+        "childish_demon", -- Hantengu
+        "compass_demon", -- Akaza
+        "awakened_frost_demon", -- Doma
+        "awakened_six_eyed_slayer", -- Kokushibo
+        "awakened_pale_demon_lord", -- Muzan (Boss)
+        
+        -- Candy Island
+        "genie_commander", -- Daifuku
+        "candy_master", -- Perospero
+        "biscuit_warrior", -- Cracker
+        "juice_queen", -- Smoothie
+        "mochi_emperor", -- Katakuri
+        "soul_queen", -- Big Mom (Boss)
+        
+        -- Solo City
+        "light_saintess", -- Cha Hae-In
+        "the_goliath", -- Thomas Andre
+        "shadow_bear", -- Tank
+        "shadow_commander", -- Igris
+        "shadow_ant", -- Beru
+        "awakened_shadow_monarch" -- Sung Jinwoo (Boss)
     },
     Interval = 10 * 60, -- 10 minutes cooldown
     Connections = {},
@@ -330,9 +387,31 @@ Utilities.MarkEnemyDefeated = function(enemyName)
     end
     
     Utilities.DebugPrint("Marking enemy as defeated: " .. tostring(enemyName))
-    -- Set cooldown to exactly 10 minutes (600 seconds)
-    AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + 600
-    Utilities.DebugPrint("Enemy " .. enemyName .. " will be available again in 10 minutes (at " .. os.date("%H:%M:%S", AutoFarmConfig.EnemyCooldowns[enemyName]) .. ")")
+    
+    -- Check if enemy is a raid boss (eternal_dragon) or world boss
+    local isRaidBoss = (enemyName == "eternal_dragon")
+    local isWorldBoss = false
+    
+    -- Check if it's a world boss
+    for _, boss in ipairs(AutoFarmConfig.WorldBosses) do
+        if enemyName == boss then
+            isWorldBoss = true
+            break
+        end
+    end
+    
+    -- Only set cooldown if it's not a raid boss
+    if isRaidBoss then
+        Utilities.DebugPrint("Enemy " .. enemyName .. " is a Raid Boss - no cooldown applied")
+    elseif isWorldBoss then
+        -- Still apply cooldown for world bosses (not raid bosses)
+        AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + 600
+        Utilities.DebugPrint("World Boss " .. enemyName .. " will be available again in 10 minutes (at " .. os.date("%H:%M:%S", AutoFarmConfig.EnemyCooldowns[enemyName]) .. ")")
+    else
+        -- Set cooldown to exactly 10 minutes (600 seconds) for regular enemies
+        AutoFarmConfig.EnemyCooldowns[enemyName] = os.time() + 600
+        Utilities.DebugPrint("Enemy " .. enemyName .. " will be available again in 10 minutes (at " .. os.date("%H:%M:%S", AutoFarmConfig.EnemyCooldowns[enemyName]) .. ")")
+    end
 end
 
 -- Enemy display names mapping
@@ -783,16 +862,16 @@ local autofarm_all_bosses_toggle = TabAutoFarm:CreateToggle({
 
 -- Auto Farm All Enemies in Selected Worlds toggle
 local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
-    Name = "Auto Farm All Selected Enemies",
-    Description = "Automatically cycles through all selected enemies in selected worlds",
+    Name = "Auto Farm All Enemies",
+    Description = "Automatically cycles through all enemies in order from all worlds",
     CurrentValue = false,
     Callback = function(Value)
         AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds = Value
         
         if Value then
             -- Start auto farm all enemies
-            Utilities.DebugPrint("Auto Farm All Selected Enemies toggle activated")
-            Utilities.Notify("Auto Farm", "Started auto farming all selected enemies", "auto_mode")
+            Utilities.DebugPrint("Auto Farm All Enemies toggle activated")
+            Utilities.Notify("Auto Farm", "Started auto farming all enemies in order", "auto_mode")
             
             -- Clear previous connections if any
             if AutoFarmConfig.Connections.AutoFarmAllEnemies then
@@ -801,77 +880,72 @@ local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
             end
             
             -- Create new auto farm loop
-            Utilities.DebugPrint("Starting Auto Farm All Enemies loop for " .. #AutoFarmConfig.SelectedEnemies .. " enemies")
+            Utilities.DebugPrint("Starting Auto Farm All Enemies loop for " .. #AutoFarmConfig.AllEnemies .. " enemies")
             AutoFarmConfig.Connections.AutoFarmAllEnemies = spawn(function()
                 local currentEnemyIndex = 1
-                local currentEnemy = AutoFarmConfig.SelectedEnemies[currentEnemyIndex] or "unstoppable_fist"
+                local currentEnemy = AutoFarmConfig.AllEnemies[currentEnemyIndex] or "unstoppable_fist"
                 
                 while AutoFarmConfig.AutoFarmAllEnemiesInSelectedWorlds do
-                    if #AutoFarmConfig.SelectedEnemies > 0 then
-                        -- Check if we can start a battle
-                        if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
-                            -- Try to find an enemy that's not on cooldown
-                            local allOnCooldown = true
-                            local startingIndex = currentEnemyIndex
+                    -- Check if we can start a battle
+                    if not Utilities.IsInBattle() and not Utilities.IsBattleEnded() then
+                        -- Try to find an enemy that's not on cooldown
+                        local allOnCooldown = true
+                        local startingIndex = currentEnemyIndex
+                        
+                        for i = 1, #AutoFarmConfig.AllEnemies do
+                            -- Calculate the next enemy index with wrap-around
+                            local nextIndex = (startingIndex + i - 1) % #AutoFarmConfig.AllEnemies + 1
+                            local nextEnemy = AutoFarmConfig.AllEnemies[nextIndex]
                             
-                            for i = 1, #AutoFarmConfig.SelectedEnemies do
-                                -- Calculate the next enemy index with wrap-around
-                                local nextIndex = (startingIndex + i - 1) % #AutoFarmConfig.SelectedEnemies + 1
-                                local nextEnemy = AutoFarmConfig.SelectedEnemies[nextIndex]
-                                
-                                -- Check if this enemy is on cooldown
-                                local currentTime = os.time()
-                                if not AutoFarmConfig.EnemyCooldowns[nextEnemy] or AutoFarmConfig.EnemyCooldowns[nextEnemy] <= currentTime then
-                                    currentEnemyIndex = nextIndex
-                                    currentEnemy = nextEnemy
-                                    allOnCooldown = false
-                                    break
-                                end
-                            end
-                            
-                            if allOnCooldown then
-                                -- All enemies are on cooldown, find the one with the shortest remaining cooldown
-                                local shortestCooldown = math.huge
-                                local shortestIndex = 1
-                                
-                                for i = 1, #AutoFarmConfig.SelectedEnemies do
-                                    local enemy = AutoFarmConfig.SelectedEnemies[i]
-                                    local remainingCooldown = (AutoFarmConfig.EnemyCooldowns[enemy] or 0) - currentTime
-                                    
-                                    if remainingCooldown < shortestCooldown then
-                                        shortestCooldown = remainingCooldown
-                                        shortestIndex = i
-                                    end
-                                end
-                                
-                                currentEnemyIndex = shortestIndex
-                                currentEnemy = AutoFarmConfig.SelectedEnemies[currentEnemyIndex]
-                                
-                                Utilities.DebugPrint("All enemies on cooldown. Waiting for " .. currentEnemy .. " (shortest cooldown: " .. math.max(0, shortestCooldown) .. " seconds)")
-                                wait(math.min(5, math.max(1, shortestCooldown))) -- Wait at least 1 second, at most 5 seconds
-                            else
-                                -- Try to start battle with current enemy (which is not on cooldown)
-                                Utilities.DebugPrint("Attempting to start battle with: " .. tostring(currentEnemy))
-                                Utilities.StartNextBattle(currentEnemy)
-                            end
-                        elseif Utilities.IsInBattle() then
-                            Utilities.DebugPrint("Currently in battle with " .. currentEnemy .. ", waiting...")
-                        elseif Utilities.IsBattleEnded() then
-                            Utilities.DebugPrint("Battle ended with " .. currentEnemy .. ", dismissing end screen")
-                            Utilities.DismissBattleEnd()
-                            
-                            -- Once battle is dismissed, mark the enemy as defeated and move to next
-                            if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
-                                Utilities.MarkEnemyDefeated(currentEnemy)
-                                
-                                -- Move to next enemy for next iteration
-                                currentEnemyIndex = currentEnemyIndex % #AutoFarmConfig.SelectedEnemies + 1
-                                currentEnemy = AutoFarmConfig.SelectedEnemies[currentEnemyIndex]
+                            -- Check if this enemy is on cooldown
+                            local currentTime = os.time()
+                            if not AutoFarmConfig.EnemyCooldowns[nextEnemy] or AutoFarmConfig.EnemyCooldowns[nextEnemy] <= currentTime then
+                                currentEnemyIndex = nextIndex
+                                currentEnemy = nextEnemy
+                                allOnCooldown = false
+                                break
                             end
                         end
-                    else
-                        Utilities.DebugPrint("No enemies selected, waiting 5 seconds")
-                        wait(5)
+                        
+                        if allOnCooldown then
+                            -- All enemies are on cooldown, find the one with the shortest remaining cooldown
+                            local shortestCooldown = math.huge
+                            local shortestIndex = 1
+                            
+                            for i = 1, #AutoFarmConfig.AllEnemies do
+                                local enemy = AutoFarmConfig.AllEnemies[i]
+                                local remainingCooldown = (AutoFarmConfig.EnemyCooldowns[enemy] or 0) - currentTime
+                                
+                                if remainingCooldown < shortestCooldown then
+                                    shortestCooldown = remainingCooldown
+                                    shortestIndex = i
+                                end
+                            end
+                            
+                            currentEnemyIndex = shortestIndex
+                            currentEnemy = AutoFarmConfig.AllEnemies[currentEnemyIndex]
+                            
+                            Utilities.DebugPrint("All enemies on cooldown. Waiting for " .. currentEnemy .. " (shortest cooldown: " .. math.max(0, shortestCooldown) .. " seconds)")
+                            wait(math.min(5, math.max(1, shortestCooldown))) -- Wait at least 1 second, at most 5 seconds
+                        else
+                            -- Try to start battle with current enemy (which is not on cooldown)
+                            Utilities.DebugPrint("Attempting to start battle with: " .. tostring(currentEnemy))
+                            Utilities.StartNextBattle(currentEnemy)
+                        end
+                    elseif Utilities.IsInBattle() then
+                        Utilities.DebugPrint("Currently in battle with " .. currentEnemy .. ", waiting...")
+                    elseif Utilities.IsBattleEnded() then
+                        Utilities.DebugPrint("Battle ended with " .. currentEnemy .. ", dismissing end screen")
+                        Utilities.DismissBattleEnd()
+                        
+                        -- Once battle is dismissed, mark the enemy as defeated and move to next
+                        if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
+                            Utilities.MarkEnemyDefeated(currentEnemy)
+                            
+                            -- Move to next enemy for next iteration (always move in sequence)
+                            currentEnemyIndex = currentEnemyIndex % #AutoFarmConfig.AllEnemies + 1
+                            currentEnemy = AutoFarmConfig.AllEnemies[currentEnemyIndex]
+                        end
                     end
                     
                     -- Wait 1 second before next check
@@ -880,8 +954,8 @@ local autofarm_all_enemies_toggle = TabAutoFarm:CreateToggle({
             end)
         else
             -- Stop auto farm all enemies
-            Utilities.DebugPrint("Auto Farm All Selected Enemies toggle deactivated")
-            Utilities.Notify("Auto Farm", "Stopped auto farming all selected enemies", "stop_circle")
+            Utilities.DebugPrint("Auto Farm All Enemies toggle deactivated")
+            Utilities.Notify("Auto Farm", "Stopped auto farming all enemies", "stop_circle")
             
             -- Disconnect auto farm loop
             if AutoFarmConfig.Connections.AutoFarmAllEnemies then
