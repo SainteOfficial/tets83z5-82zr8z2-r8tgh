@@ -40,6 +40,31 @@ local Window = Luna:CreateWindow({
 -- Utility Functions
 local Utilities = {}
 
+-- Füge eine sicherere WaitForChild-Funktion mit Timeout hinzu
+Utilities.SafeWaitForChild = function(parent, childName, timeout)
+    timeout = timeout or 10 -- Standard-Timeout von 10 Sekunden
+    
+    local startTime = os.time()
+    local child = nil
+    
+    -- Versuche das Kind zu finden, bis es gefunden wird oder das Timeout erreicht ist
+    while not child and os.time() - startTime < timeout do
+        child = parent:FindFirstChild(childName)
+        if child then
+            return child
+        end
+        wait(0.1) -- Kurz warten, um nicht zu viel CPU zu verbrauchen
+    end
+    
+    -- Wenn das Kind nicht gefunden wurde, gib eine Warnung aus
+    if not child then
+        warn("SafeWaitForChild: Konnte " .. childName .. " in " .. parent.Name .. " nicht finden (Timeout nach " .. timeout .. " Sekunden)")
+        return nil
+    end
+    
+    return child
+end
+
 -- Function to summon an enemy for battle
 Utilities.SummonEnemy = function(enemyName)
     if not enemyName then
@@ -51,11 +76,24 @@ Utilities.SummonEnemy = function(enemyName)
             [1] = enemyName
         }
         
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+        -- Verwende SafeWaitForChild statt WaitForChild, um Infinite Yield zu vermeiden
+        local child3aA = Utilities.SafeWaitForChild(replicatedStorage, "3aA", 5)
+        if not child3aA then
+            return false
+        end
+        
+        local battleRemote = Utilities.SafeWaitForChild(child3aA, "9f262bf4-f76a-4916-94dc-46596cc25770", 3)
+        if not battleRemote then
+            return false
+        end
+        
+        battleRemote:FireServer(unpack(args))
         return true
     end)
     
     if not success then
+        warn("SummonEnemy fehlgeschlagen: " .. tostring(result))
         return false
     end
     
@@ -85,7 +123,19 @@ end
 -- Function to get Battle Tower level
 Utilities.GetBattleTowerLevel = function()
     local success, result = pcall(function()
-        local LocalUserModule = game:GetService("ReplicatedStorage"):WaitForChild("TS"):WaitForChild("user"):WaitForChild("local"):WaitForChild("local-user")
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+        local TS = Utilities.SafeWaitForChild(replicatedStorage, "TS", 5)
+        if not TS then return 1 end
+        
+        local user = Utilities.SafeWaitForChild(TS, "user", 3)
+        if not user then return 1 end
+        
+        local localFolder = Utilities.SafeWaitForChild(user, "local", 3)
+        if not localFolder then return 1 end
+        
+        local LocalUserModule = Utilities.SafeWaitForChild(localFolder, "local-user", 3)
+        if not LocalUserModule then return 1 end
+        
         local LocalUser = require(LocalUserModule).LocalUser
         local battleTowerWave = LocalUser.metadata:getAsNumber("battle_tower_wave")
         return battleTowerWave or 1
@@ -1203,16 +1253,30 @@ TabTowers:CreateButton({
             }
             
             local success, result = pcall(function()
-                game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("c1438c4a-417f-41ee-9363-1ebabcc0bbd9"):FireServer(unpack(args))
+                local replicatedStorage = game:GetService("ReplicatedStorage")
+                local child3aA = Utilities.SafeWaitForChild(replicatedStorage, "3aA", 5)
+                if not child3aA then
+                    Utilities.Notify("Fehler", "Konnte 3aA in ReplicatedStorage nicht finden", "error")
+                    return false
+                end
+                
+                local towerRemote = Utilities.SafeWaitForChild(child3aA, "c1438c4a-417f-41ee-9363-1ebabcc0bbd9", 3)
+                if not towerRemote then
+                    Utilities.Notify("Fehler", "Konnte Tower-Remote in 3aA nicht finden", "error")
+                    return false
+                end
+                
+                towerRemote:FireServer(unpack(args))
+                return true
             end)
             
-            if success then
+            if success and result then
                 Utilities.Notify("Battle Tower", "Battle Tower started at level " .. level, "castle")
             else
-                Utilities.Notify("Error", "Failed to start Battle Tower", "error")
+                Utilities.Notify("Fehler", "Battle Tower konnte nicht gestartet werden", "error")
             end
         else
-            Utilities.Notify("Error", "Please select a valid level between 1 and 100", "error")
+            Utilities.Notify("Fehler", "Bitte wähle ein Level zwischen 1 und 100", "error")
         end
     end
 })
