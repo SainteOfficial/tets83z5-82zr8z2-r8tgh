@@ -3562,43 +3562,30 @@ Utilities.SendInventoryWebhook = function()
         
         -- Returns the matching emoji for a category
         local function getCategoryEmoji(categoryName)
-            if not categoryName then return "❓" end
+            -- Direkte Zuordnung mit einfachen String-Checks
+            local categoryLower = string.lower(tostring(categoryName or ""))
             
-            -- Debug-Ausgabe zur Hilfe beim Finden des Problems
-            warn("Kategoriename: " .. tostring(categoryName))
-            
-            -- Versuche verschiedene Formatierungen
-            local emoji = CATEGORY_EMOJIS[categoryName] -- Exakter Match
-            
-            if not emoji then
-                -- Versuche Uppercase
-                emoji = CATEGORY_EMOJIS[string.upper(categoryName)]
+            if string.find(categoryLower, "potion") then
+                return "🧪"
+            elseif string.find(categoryLower, "trait") then
+                return "⚛️"
+            elseif string.find(categoryLower, "title") then
+                return "👑"
+            elseif string.find(categoryLower, "equipment") then
+                return "🗡️"
+            elseif string.find(categoryLower, "artifact") then
+                return "🔮"
+            elseif string.find(categoryLower, "instant") or string.find(categoryLower, "roll") then
+                return "🎲"
+            elseif string.find(categoryLower, "card") then
+                return "🎴"
+            elseif string.find(categoryLower, "raid") then
+                return "🏯"
+            elseif string.find(categoryLower, "misc") then
+                return "📦"
             end
             
-            if not emoji then
-                -- Fallback auf feste Zuordnung basierend auf Namen
-                if string.find(categoryName:lower(), "potion") then
-                    return "🧪"
-                elseif string.find(categoryName:lower(), "trait") then
-                    return "⚛️"
-                elseif string.find(categoryName:lower(), "title") then
-                    return "👑"
-                elseif string.find(categoryName:lower(), "equipment") then
-                    return "🗡️"
-                elseif string.find(categoryName:lower(), "artifact") then
-                    return "🔮"
-                elseif string.find(categoryName:lower(), "instant") or string.find(categoryName:lower(), "roll") then
-                    return "🎲"
-                elseif string.find(categoryName:lower(), "card") or string.find(categoryName:lower(), "back") then
-                    return "🎴"
-                elseif string.find(categoryName:lower(), "raid") then
-                    return "🏯"
-                elseif string.find(categoryName:lower(), "misc") then
-                    return "📦"
-                end
-            end
-            
-            return emoji or "❓" -- Fallback auf Fragezeichen
+            return "❓" -- Fallback
         end
         
         -- Returns the matching emoji for a rarity
@@ -3748,9 +3735,9 @@ Utilities.SendInventoryWebhook = function()
         -- Erstelle für jede Kategorie ein eigenes Embed für bessere Lesbarkeit
         for categoryName, items in pairs(categorizedItems) do
             if #items > 0 then
-                local emoji = getCategoryEmoji(categoryName)
+                local categoryEmoji = getCategoryEmoji(categoryName)
                 local categoryEmbed = {
-                    title = formatHeader(categoryName, emoji),
+                    title = formatHeader(categoryName, categoryEmoji),
                     description = "**Total:** " .. #items .. " items",
                     color = categoryColors[categoryName] or 0x2ECC71, -- Grün als Standard
                     fields = {},
@@ -3852,9 +3839,9 @@ Utilities.SendInventoryWebhook = function()
             end
             
             if #rareItems > 0 then
-                local emoji = getCategoryEmoji(categoryName)
+                local categoryEmoji = getCategoryEmoji(categoryName)
                 local rareItemsField = {
-                    name = emoji .. " **" .. categoryName .. "**",
+                    name = categoryEmoji .. " **" .. categoryName .. "**",
                     value = "",
                     inline = true
                 }
@@ -3920,9 +3907,9 @@ Utilities.SendInventoryWebhook = function()
             end
             
             -- Erstelle ein klares, organisiertes Format für die Kategorieüberschrift
-            local emoji = getCategoryEmoji(categoryName)
+            local categoryEmoji = getCategoryEmoji(categoryName)
             local categoryField = {
-                name = emoji .. " **" .. categoryName .. " Items** (" .. #items .. ")",
+                name = categoryEmoji .. " **" .. categoryName .. "** (" .. #items .. ")",
                 value = "",
                 inline = false
             }
@@ -3964,13 +3951,14 @@ Utilities.SendInventoryWebhook = function()
                 return a.name < b.name
             end)
             
-            -- Füge jeden Item-Eintrag zum Feld hinzu, mit Kategorie-Emoji statt Raritäts-Emoji
+            -- Füge jeden Item-Eintrag zum Feld hinzu
             for _, itemData in ipairs(sortedItems) do
                 local equipped = itemData.equipped and " ✅" or ""
                 
+                -- WICHTIG: Verwende dasselbe Emoji wie für die Kategorie für jedes Item
                 categoryField.value = categoryField.value .. string.format(
                     "%s **%s** (×%d)%s\n",
-                    emoji, -- Verwende Kategorie-Emoji für alle Items in dieser Kategorie
+                    categoryEmoji,
                     itemData.name,
                     itemData.quantity,
                     equipped
