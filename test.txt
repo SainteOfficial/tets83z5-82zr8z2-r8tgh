@@ -3894,7 +3894,6 @@ Utilities.SendInventoryWebhook = function()
                         groupedItems[key] = {
                             name = itemName,
                             quantity = 0,
-                            rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN",
                             equipped = item.data.equipped or false
                         }
                     end
@@ -3915,32 +3914,18 @@ Utilities.SendInventoryWebhook = function()
                 table.insert(sortedItems, itemData)
             end
             
-            -- Sortiere erst nach Seltenheit (höher zuerst), dann nach Namen
-            local rarityValues = {
-                MYTHIC = 6,
-                LEGENDARY = 5,
-                EPIC = 4,
-                RARE = 3,
-                UNCOMMON = 2,
-                COMMON = 1,
-                UNKNOWN = 0
-            }
-            
+            -- Sortiere nur nach Namen, da es keine Raritäten gibt
             table.sort(sortedItems, function(a, b)
-                if rarityValues[a.rarityName] ~= rarityValues[b.rarityName] then
-                    return (rarityValues[a.rarityName] or 0) > (rarityValues[b.rarityName] or 0)
-                end
                 return a.name < b.name
             end)
             
-            -- Füge jeden Item-Eintrag zum Feld hinzu
+            -- Füge jeden Item-Eintrag zum Feld hinzu, mit Kategorie-Emoji statt Raritäts-Emoji
             for _, itemData in ipairs(sortedItems) do
-                local rarityEmoji = getRarityEmoji(itemData.rarityName)
                 local equipped = itemData.equipped and " ✅" or ""
                 
                 categoryField.value = categoryField.value .. string.format(
                     "%s **%s** (×%d)%s\n",
-                    rarityEmoji,
+                    emoji, -- Verwende Kategorie-Emoji für alle Items
                     itemData.name,
                     itemData.quantity,
                     equipped
@@ -3953,74 +3938,19 @@ Utilities.SendInventoryWebhook = function()
             end
         end
         
-        -- Zum Schluss eine Raritätsverteilung hinzufügen
-        local rarityStats = {
-            COMMON = 0,
-            UNCOMMON = 0,
-            RARE = 0,
-            EPIC = 0, 
-            LEGENDARY = 0,
-            MYTHIC = 0
-        }
-        
-        local totalItemsCount = 0
-        -- Berechne die Statistik
-        for _, items in pairs(categorizedItems) do
-            for _, item in ipairs(items) do
-                if item and item.info and item.data then
-                    local quantity = item.data.quantity or 1
-                    totalItemsCount = totalItemsCount + quantity
-                    
-                    -- Zähle nur Items mit gültiger Seltenheit
-                    if item.info.rarity and item.info.rarity.name and rarityStats[item.info.rarity.name] then
-                        rarityStats[item.info.rarity.name] = rarityStats[item.info.rarity.name] + quantity
-                    end
-                end
-            end
-        end
-        
-        -- Erstelle das Raritätsverteilungsfeld
-        if totalItemsCount > 0 then
-            local rarityField = {
-                name = "📈 **Seltenheitsverteilung**",
-                value = "",
-                inline = false
-            }
-            
-            local rarityOrder = {"MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON"}
-            
-            for _, rarityName in ipairs(rarityOrder) do
-                local count = rarityStats[rarityName] or 0
-                if count > 0 then
-                    local percentage = math.floor((count / totalItemsCount) * 100)
-                    local rarityEmoji = getRarityEmoji(rarityName)
-                    local displayName = RARITY_NAMES[rarityName] or rarityName
-                    
-                    rarityField.value = rarityField.value .. string.format(
-                        "%s **%s:** %d (%d%%)\n",
-                        rarityEmoji,
-                        displayName,
-                        count,
-                        percentage
-                    )
-                end
-            end
-            
-            if rarityField.value ~= "" then
-                table.insert(statsEmbed.fields, rarityField)
-            end
-        end
-        
         -- Füge eine Legende für die Symbole hinzu
         local legendField = {
             name = "ℹ️ **Legende**",
             value = "✅ = Ausgerüstet/Equipped\n" ..
-                    "⚪ = Gewöhnlich/Common\n" ..
-                    "🟢 = Ungewöhnlich/Uncommon\n" ..
-                    "🔷 = Selten/Rare\n" ..
-                    "🟣 = Episch/Epic\n" ..
-                    "🟡 = Legendär/Legendary\n" ..
-                    "🔴 = Mythisch/Mythic",
+                    "🧪 = Potion\n" ..
+                    "⚛️ = Trait\n" ..
+                    "👑 = Title\n" ..
+                    "🗡️ = Equipment\n" ..
+                    "🔮 = Artifact\n" ..
+                    "🎲 = Instant Roll\n" ..
+                    "🎴 = Card Back\n" ..
+                    "🏯 = Raid\n" ..
+                    "📦 = Misc",
             inline = false
         }
         table.insert(statsEmbed.fields, legendField)
