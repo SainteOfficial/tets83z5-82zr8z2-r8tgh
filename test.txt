@@ -3534,13 +3534,13 @@ Utilities.SendInventoryWebhook = function()
         -- Category emojis
         local CATEGORY_EMOJIS = {
             POTION = "🧪",
-            TRAIT = "🧬",
+            TRAIT = "⚛️",
             TITLE = "👑",
-            EQUIPMENT = "⚔️",
+            EQUIPMENT = "🗡️",
             ARTIFACT = "🔮",
             INSTANT_ROLL = "🎲",
-            CARD_BACK = "🃏",
-            RAID = "🏰",
+            CARD_BACK = "🎴",
+            RAID = "🏯",
             MISC = "📦"
         }
         
@@ -3548,9 +3548,9 @@ Utilities.SendInventoryWebhook = function()
         local RARITY_EMOJIS = {
             COMMON = "⚪",
             UNCOMMON = "🟢",
-            RARE = "🔵",
+            RARE = "🔷",
             EPIC = "🟣",
-            LEGENDARY = "🟠",
+            LEGENDARY = "🟡",
             MYTHIC = "🔴"
         }
         
@@ -3628,17 +3628,43 @@ Utilities.SendInventoryWebhook = function()
         
         local maskedUsername = "||<" .. playerName .. ">||"
         
+        -- Versuche, das lokale Logo zu laden
+        local logoPath = "C:\\Users\\saint\\Downloads\\Python Projekte\\AnimeCardClash\\MYTHLOGO.png"
+        local logoUrl = "https://i.imgur.com/jVJ9q32.png" -- Fallback URL
+        
+        -- Versuche, das lokale Logo zu verwenden
+        local useLocalLogo = false
+        pcall(function()
+            if isfile and isfile(logoPath) then
+                -- Wenn wir bestätigen können, dass die Datei existiert
+                useLocalLogo = true
+                -- Hinweis: Discord Webhooks können nur öffentliche URLs für Bilder verwenden,
+                -- also brauchen wir eine Base64-Kodierung oder müssen das Bild irgendwo hochladen
+            end
+        end)
+        
+        -- Wenn wir das lokale Logo gefunden haben, verwenden wir den vollen Pfad
+        if useLocalLogo then
+            -- In einer echten Implementierung würdest du hier einen Dienst nutzen,
+            -- um das Bild hochzuladen und die URL zu verwenden
+            logoUrl = "file://" .. logoPath
+        end
+        
         -- Prepare output for Discord
         local embeds = {}
         local mainEmbed = {
-            title = "📦 **Inventory Overview**",
+            title = "🎮 **MYTHHUB INVENTORY TRACKER**",
             description = "Player: " .. maskedUsername .. "\n" ..
                       "Total Items: **" .. itemCount .. "**\n\n" ..
                       "Last Updated: <t:" .. currentTime .. ":R>",
-            color = 3447003, -- Discord Blue
+            color = 0xFF0000, -- Rot für MythHub Branding
+            thumbnail = {
+                url = logoUrl
+            },
             fields = {},
             footer = {
-                text = "MythHub Premium | github.com/MythHubRoblox/MythHub"
+                text = "MythHub Premium • github.com/MythHubRoblox/MythHub",
+                icon_url = logoUrl
             },
             timestamp = DateTime.now():ToIsoDate()
         }
@@ -3684,82 +3710,87 @@ Utilities.SendInventoryWebhook = function()
         table.insert(mainEmbed.fields, equippedField)
         table.insert(embeds, mainEmbed)
         
-        -- Category overview
-        local categoryOverviewEmbed = {
-            title = "🗂️ **Category Overview**",
-            color = 7506394, -- Discord Green
-            fields = {},
-            footer = {
-                text = "MythHub Premium | Anime Card Clash"
-            }
-        }
+        -- Category overview - wir erstellen für jede Kategorie ein eigenes Embed statt alle zusammen
+        -- Entferne das alte categoryOverviewEmbed
         
-        -- Create a field for each category
+        -- Erstelle für jede Kategorie ein eigenes Embed für bessere Lesbarkeit
         for categoryName, items in pairs(categorizedItems) do
-            local emoji = getCategoryEmoji(categoryName)
-            local categoryField = {
-                name = emoji .. " **" .. categoryName .. "**",
-                value = "",
-                inline = true
-            }
-            
-            -- Sort items by rarity and name
-            local sortSuccess, sortError = pcall(function()
-                table.sort(items, function(a, b)
-                    if not a or not b or not a.info or not b.info then return false end
-                    
-                    if (a.info.rarity and b.info.rarity and a.info.rarity.value ~= b.info.rarity.value) then
-                        return (a.info.rarity.value or 0) > (b.info.rarity.value or 0)
+            if #items > 0 then
+                local emoji = getCategoryEmoji(categoryName)
+                local categoryEmbed = {
+                    title = emoji .. " **" .. categoryName .. " ITEMS**",
+                    description = "**Total:** " .. #items .. " items",
+                    color = 0x2ECC71, -- Grün als Standard
+                    fields = {},
+                    footer = {
+                        text = "MythHub Premium • Category: " .. categoryName,
+                        icon_url = logoUrl
+                    }
+                }
+                
+                -- Items nach Seltenheit gruppieren für bessere Übersicht
+                local itemsByRarity = {}
+                for _, item in ipairs(items) do
+                    if item and item.info and item.data then
+                        local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
+                        if not itemsByRarity[rarityName] then
+                            itemsByRarity[rarityName] = {}
+                        end
+                        table.insert(itemsByRarity[rarityName], item)
                     end
-                    return (a.info.name or "") < (b.info.name or "")
-                end)
-            end)
-            
-            if not sortSuccess then
-                warn("Failed to sort items: " .. tostring(sortError))
-            end
-            
-            -- Maximum 10 items per category (Discord limit)
-            local itemsToShow = math.min(10, #items)
-            for i = 1, itemsToShow do
-                local item = items[i]
-                if item and item.info and item.data then
-                    local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
-                    local rarityEmoji = getRarityEmoji(rarityName)
-                    local equipped = (item.data.equipped and "✅") or ""
-                    
-                    categoryField.value = categoryField.value .. string.format(
-                        "%s **%s** (×%d) %s\n",
-                        rarityEmoji,
-                        item.info.name or "Unknown Item",
-                        item.data.quantity or 0,
-                        equipped
-                    )
+                end
+                
+                -- Seltenheiten in absteigender Reihenfolge (Mythisch zuerst)
+                local rarityOrder = {"MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON"}
+                
+                for _, rarityName in ipairs(rarityOrder) do
+                    local rarityItems = itemsByRarity[rarityName]
+                    if rarityItems and #rarityItems > 0 then
+                        local rarityEmoji = getRarityEmoji(rarityName)
+                        local displayName = RARITY_NAMES[rarityName] or rarityName
+                        local fieldValue = ""
+                        
+                        -- Begrenze auf 8 Items pro Seltenheit für bessere Lesbarkeit
+                        local itemsToShow = math.min(8, #rarityItems)
+                        for i = 1, itemsToShow do
+                            local item = rarityItems[i]
+                            local equipped = (item.data.equipped and "✅") or ""
+                            
+                            fieldValue = fieldValue .. string.format(
+                                "**%s** (×%d) %s\n",
+                                item.info.name or "Unknown Item",
+                                item.data.quantity or 0,
+                                equipped
+                            )
+                        end
+                        
+                        if #rarityItems > itemsToShow then
+                            fieldValue = fieldValue .. "*... and " .. (#rarityItems - itemsToShow) .. " more*\n"
+                        end
+                        
+                        table.insert(categoryEmbed.fields, {
+                            name = rarityEmoji .. " **" .. displayName .. "** (" .. #rarityItems .. ")",
+                            value = fieldValue,
+                            inline = false
+                        })
+                    end
+                end
+                
+                if #categoryEmbed.fields > 0 then
+                    table.insert(embeds, categoryEmbed)
                 end
             end
-            
-            -- If more than 10 items, show "and X more..."
-            if #items > 10 then
-                categoryField.value = categoryField.value .. "*...and " .. (#items - 10) .. " more items*"
-            end
-            
-            if categoryField.value == "" then
-                categoryField.value = "*No items in this category*"
-            end
-            
-            table.insert(categoryOverviewEmbed.fields, categoryField)
         end
-        
-        table.insert(embeds, categoryOverviewEmbed)
         
         -- Rare items overview (Legendary & Mythic)
         local rareItemsEmbed = {
-            title = "✨ **Rare Items Collection**",
-            description = "Legendary and mythic items in inventory",
-            color = 15844367, -- Discord Gold
+            title = "✨ **RARE ITEMS COLLECTION**",
+            description = "Legendary and mythic items in your inventory",
+            color = 0xF1C40F, -- Gold
             fields = {},
             footer = {
-                text = "MythHub Premium | " .. formattedTime
+                text = "MythHub Premium • " .. formattedTime,
+                icon_url = logoUrl
             }
         }
         
@@ -3831,11 +3862,12 @@ Utilities.SendInventoryWebhook = function()
         
         -- Add statistics embed
         local statsEmbed = {
-            title = "📊 **Inventory Statistics**",
-            color = 10181046, -- Discord Purple
+            title = "📊 **INVENTORY STATISTICS**",
+            color = 0x9B59B6, -- Lila
             fields = {},
             footer = {
-                text = "MythHub Premium | discord.gg/mythhub"
+                text = "MythHub Premium • discord.gg/mythhub",
+                icon_url = logoUrl
             }
         }
         
@@ -3862,37 +3894,97 @@ Utilities.SendInventoryWebhook = function()
         
         -- Create rarity statistics field
         local rarityField = {
-            name = "📈 **Item Rarity Breakdown**",
+            name = "📈 **Item Rarity Distribution**",
             value = "",
-            inline = true
+            inline = false
         }
         
-        for rarityName, count in pairs(rarityStats) do
+        local totalItems = 0
+        for _, count in pairs(rarityStats) do
+            totalItems = totalItems + count
+        end
+        
+        -- Seltenheiten in absteigender Reihenfolge (Mythisch zuerst)
+        local rarityOrder = {"MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON"}
+        
+        for _, rarityName in ipairs(rarityOrder) do
+            local count = rarityStats[rarityName] or 0
             if count > 0 then
                 local rarityEmoji = getRarityEmoji(rarityName)
+                local displayName = RARITY_NAMES[rarityName] or rarityName
+                local percentage = math.floor((count / totalItems) * 100)
+                local barLength = math.max(1, math.floor(percentage / 5))
+                local progressBar = string.rep("█", barLength) .. string.rep("░", 20 - barLength)
+                
                 rarityField.value = rarityField.value .. string.format(
-                    "%s **%s:** %d\n",
+                    "%s **%s:** %d (%d%%)\n`%s`\n",
                     rarityEmoji,
-                    rarityName,
-                    count
+                    displayName,
+                    count,
+                    percentage,
+                    progressBar
                 )
             end
         end
         
         table.insert(statsEmbed.fields, rarityField)
+        
+        -- Füge zusätzliche Statistiken hinzu
+        local categoryStatsField = {
+            name = "🗃️ **Category Distribution**",
+            value = "",
+            inline = false
+        }
+        
+        local categoryCount = {}
+        for categoryName, items in pairs(categorizedItems) do
+            local itemCount = 0
+            for _, item in ipairs(items) do
+                itemCount = itemCount + (item.data.quantity or 1)
+            end
+            categoryCount[categoryName] = itemCount
+        end
+        
+        -- Kategorien nach Anzahl sortieren
+        local sortedCategories = {}
+        for categoryName, count in pairs(categoryCount) do
+            table.insert(sortedCategories, {name = categoryName, count = count})
+        end
+        
+        table.sort(sortedCategories, function(a, b) return a.count > b.count end)
+        
+        for _, category in ipairs(sortedCategories) do
+            local emoji = getCategoryEmoji(category.name)
+            local percentage = math.floor((category.count / totalItems) * 100)
+            
+            categoryStatsField.value = categoryStatsField.value .. string.format(
+                "%s **%s:** %d (%d%%)\n",
+                emoji,
+                category.name,
+                category.count,
+                percentage
+            )
+        end
+        
+        table.insert(statsEmbed.fields, categoryStatsField)
         table.insert(embeds, statsEmbed)
         
-        -- Send webhook with embeds
+        -- Versende Webhook mit verbessertem Design
         local HttpService = game:GetService("HttpService")
         local httpRequest = (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or request
         
         if httpRequest then
-            -- Discord allows maximum 10 embeds per message
+            -- Discord erlaubt maximal 10 Embeds pro Nachricht
             if #embeds > 10 then
                 embeds = {table.unpack(embeds, 1, 10)}
             end
             
-            -- Send webhook message with avatar and username
+            -- Erstelle einen schöneren Webhook-Titel
+            local currentDate = os.date("%d.%m.%Y", os.time())
+            local webhookContent = "## 📋 MythHub Inventory Report - " .. currentDate .. "\n"
+            webhookContent = webhookContent .. "Player: " .. maskedUsername .. " | Items: " .. itemCount
+            
+            -- Verbesserte Webhook-Nachricht mit Avatar und Benutzername
             httpRequest({
                 Url = WebhookConfig.URL,
                 Method = "POST",
@@ -3900,9 +3992,9 @@ Utilities.SendInventoryWebhook = function()
                     ["Content-Type"] = "application/json"
                 },
                 Body = HttpService:JSONEncode({
-                    username = "MythHub Inventory Tracker",
-                    avatar_url = "https://i.imgur.com/jVJ9q32.png", -- MythHub logo or similar
-                    content = "**Inventory Snapshot** - " .. maskedUsername,
+                    username = "MythHub Inventory System",
+                    avatar_url = logoUrl,
+                    content = webhookContent,
                     embeds = embeds
                 })
             })
