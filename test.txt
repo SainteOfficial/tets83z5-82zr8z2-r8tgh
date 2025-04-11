@@ -12,7 +12,7 @@
     - Shop-Automatisierung
     - Verschiedene Utilities wie Auto-Pickup, Auto-Merge und mehr
     
-    Zuletzt aktualisiert: April 2025
+    Zuletzt aktualisiert: Mai 2025
 ]]
 
 print("Nothing to see here :O")
@@ -78,12 +78,12 @@ Utilities.SummonEnemy = function(enemyName)
         
         local replicatedStorage = game:GetService("ReplicatedStorage")
         -- Verwende SafeWaitForChild statt WaitForChild, um Infinite Yield zu vermeiden
-        local child3aA = Utilities.SafeWaitForChild(replicatedStorage, "3aA", 5)
-        if not child3aA then
+        local childkQR = Utilities.SafeWaitForChild(replicatedStorage, "kQR", 5)
+        if not childkQR then
             return false
         end
         
-        local battleRemote = Utilities.SafeWaitForChild(child3aA, "9f262bf4-f76a-4916-94dc-46596cc25770", 3)
+        local battleRemote = Utilities.SafeWaitForChild(childkQR, "8a63919a-217b-436a-9cfa-4b472d213bbb", 3)
         if not battleRemote then
             return false
         end
@@ -406,7 +406,7 @@ Utilities.StartNextBattle = function(enemyName)
                 [1] = enemyName
             }
             
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("8a63919a-217b-436a-9cfa-4b472d213bbb"):FireServer(unpack(args))
             success = true
         end)
         
@@ -1254,15 +1254,15 @@ TabTowers:CreateButton({
             
             local success, result = pcall(function()
                 local replicatedStorage = game:GetService("ReplicatedStorage")
-                local child3aA = Utilities.SafeWaitForChild(replicatedStorage, "3aA", 5)
-                if not child3aA then
-                    Utilities.Notify("Fehler", "Konnte 3aA in ReplicatedStorage nicht finden", "error")
+                local childkQR = Utilities.SafeWaitForChild(replicatedStorage, "kQR", 5)
+                if not childkQR then
+                    Utilities.Notify("Fehler", "Konnte kQR in ReplicatedStorage nicht finden", "error")
                     return false
                 end
                 
-                local towerRemote = Utilities.SafeWaitForChild(child3aA, "c1438c4a-417f-41ee-9363-1ebabcc0bbd9", 3)
+                local towerRemote = Utilities.SafeWaitForChild(childkQR, "1457e535-9d02-4014-9883-7618f41bed84", 3)
                 if not towerRemote then
-                    Utilities.Notify("Fehler", "Konnte Tower-Remote in 3aA nicht finden", "error")
+                    Utilities.Notify("Fehler", "Konnte Tower-Remote in kQR nicht finden", "error")
                     return false
                 end
                 
@@ -1308,7 +1308,7 @@ local continuous_tower_toggle = TabTowers:CreateToggle({
                         }
                         
                         pcall(function()
-                            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("c1438c4a-417f-41ee-9363-1ebabcc0bbd9"):FireServer(unpack(args))
+                            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("1457e535-9d02-4014-9883-7618f41bed84"):FireServer(unpack(args))
                         end)
                         
                         Utilities.DebugPrint("Auto Continuous Battle Tower - Level " .. TowerConfig.BattleTowerLevel .. " started")
@@ -1359,7 +1359,7 @@ local highest_tower_toggle = TabTowers:CreateToggle({
                         }
                         
                         pcall(function()
-                            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("c1438c4a-417f-41ee-9363-1ebabcc0bbd9"):FireServer(unpack(args))
+                            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("1457e535-9d02-4014-9883-7618f41bed84"):FireServer(unpack(args))
                         end)
                         
                         Utilities.DebugPrint("Auto Highest Battle Tower - Level " .. currentLevel .. " started")
@@ -1407,7 +1407,7 @@ TabTowers:CreateButton({
     Description = "Begin the Infinite Tower challenge",
     Callback = function()
         local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("888b9aa0-9ca6-4c77-9946-cebf1edf613d"):FireServer()
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("60ed7d69-2cac-467c-9695-6ab3e77159b9"):FireServer()
         end)
         
         if success then
@@ -1423,7 +1423,7 @@ TabTowers:CreateButton({
     Description = "Pause the current Infinite Tower challenge",
     Callback = function()
         local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("a8a25480-c0f3-426b-834f-0f95cf058edc"):FireServer()
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("5bdb0ab8-610f-4823-9e57-4cd48a5c4eb8"):FireServer()
         end)
         
         if success then
@@ -1439,7 +1439,7 @@ TabTowers:CreateButton({
     Description = "End the current Infinite Tower challenge",
     Callback = function()
         local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("179a96b5-b8d2-4156-a939-6f34c92aa7a6"):FireServer()
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("23fb560d-73d0-404a-8dda-bf8088b08f0a"):FireServer()
         end)
         
         if success then
@@ -1493,7 +1493,7 @@ local auto_summon_dragon_toggle = TabRaids:CreateToggle({
                                 [1] = "eternal_dragon"
                             }
                             
-                            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+                            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("8a63919a-217b-436a-9cfa-4b472d213bbb"):FireServer(unpack(args))
                         end)
                         wait(3)
                     end
@@ -1521,7 +1521,7 @@ TabRaids:CreateButton({
                 [1] = "eternal_dragon"
             }
             
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("8a63919a-217b-436a-9cfa-4b472d213bbb"):FireServer(unpack(args))
         end)
         
         if success then
@@ -1560,7 +1560,7 @@ local auto_summon_shadow_dragon_toggle = TabRaids:CreateToggle({
                                 [1] = "shadow_dragon"
                             }
                             
-                            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+                            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("8a63919a-217b-436a-9cfa-4b472d213bbb"):FireServer(unpack(args))
                         end)
                         wait(3)
                     end
@@ -1588,7 +1588,7 @@ TabRaids:CreateButton({
                 [1] = "shadow_dragon"
             }
             
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("9f262bf4-f76a-4916-94dc-46596cc25770"):FireServer(unpack(args))
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("8a63919a-217b-436a-9cfa-4b472d213bbb"):FireServer(unpack(args))
         end)
         
         if success then
@@ -1660,7 +1660,7 @@ TabExploration:CreateButton({
         }
         
         local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("569ba6a6-d5ea-488e-b729-0f0b6dbaf40c"):FireServer(unpack(args))
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("4971f60f-90ff-4142-bf88-5395122136c2"):FireServer(unpack(args))
         end)
         
         if success then
@@ -1710,7 +1710,7 @@ local auto_claim_easy_toggle = TabExploration:CreateToggle({
                     }
                     
                     pcall(function()
-                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                        game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("e82eeec1-ca38-4f7b-bf14-4b85df674c7b"):FireServer(unpack(args))
                     end)
                     
                     Utilities.DebugPrint("Auto Claiming Easy Exploration Rewards")
@@ -1755,7 +1755,7 @@ local auto_claim_medium_toggle = TabExploration:CreateToggle({
                     }
                     
                     pcall(function()
-                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                        game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("e82eeec1-ca38-4f7b-bf14-4b85df674c7b"):FireServer(unpack(args))
                     end)
                     
                     Utilities.DebugPrint("Auto Claiming Medium Exploration Rewards")
@@ -1800,7 +1800,7 @@ local auto_claim_hard_toggle = TabExploration:CreateToggle({
                     }
                     
                     pcall(function()
-                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                        game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("e82eeec1-ca38-4f7b-bf14-4b85df674c7b"):FireServer(unpack(args))
                     end)
                     
                     wait(5) -- Try every 5 seconds
@@ -1841,7 +1841,7 @@ local auto_claim_extreme_toggle = TabExploration:CreateToggle({
                     }
                     
                     pcall(function()
-                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                        game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("e82eeec1-ca38-4f7b-bf14-4b85df674c7b"):FireServer(unpack(args))
                     end)
                     
                     wait(5) -- Try every 5 seconds
@@ -1880,7 +1880,7 @@ local auto_claim_nightmare_toggle = TabExploration:CreateToggle({
                     }
                     
                     pcall(function()
-                        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("e54723ed-0747-47de-9a09-3153dfb2acd7"):FireServer(unpack(args))
+                        game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("e82eeec1-ca38-4f7b-bf14-4b85df674c7b"):FireServer(unpack(args))
                     end)
                     
                     wait(5) -- Try every 5 seconds
@@ -1927,7 +1927,7 @@ TabExploration:CreateButton({
         }
         
         local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("569ba6a6-d5ea-488e-b729-0f0b6dbaf40c"):FireServer(unpack(args))
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("4971f60f-90ff-4142-bf88-5395122136c2"):FireServer(unpack(args))
         end)
         
         if success then
@@ -1964,7 +1964,7 @@ TabExploration:CreateButton({
         }
         
         local success, result = pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("569ba6a6-d5ea-488e-b729-0f0b6dbaf40c"):FireServer(unpack(args))
+            game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("4971f60f-90ff-4142-bf88-5395122136c2"):FireServer(unpack(args))
         end)
         
         if success then
@@ -2653,7 +2653,7 @@ Utilities.UpgradeStat = function(statType)
     }
     
     pcall(function()
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("af785685-b79a-4491-8d84-e3b637aa6fc5"):FireServer(unpack(args))
+        game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("a0d1432a-262d-4b0a-9173-ee8b1dcfb69c"):FireServer(unpack(args))
     end)
 end
 
@@ -2667,6 +2667,24 @@ Utilities.BuyShopItem = function(itemName, amount)
     }
     
     pcall(function()
-        game:GetService("ReplicatedStorage"):WaitForChild("3aA"):WaitForChild("54f5f951-af4e-447d-9ee4-c63d9130fe77"):FireServer(unpack(args))
+        game:GetService("ReplicatedStorage"):WaitForChild("kQR"):WaitForChild("41ccb1a6-1009-4e2f-924e-1b71f8020e9b"):FireServer(unpack(args))
     end)
 end
+
+--[[
+    ÄNDERUNGSPROTOKOLL - MAI 2025
+    
+    - Remote-Pfade von "3aA" auf "kQR" aktualisiert
+    - Remote-IDs für alle Funktionen aktualisiert:
+      * SummonEnemy: 8a63919a-217b-436a-9cfa-4b472d213bbb
+      * Battle Tower: 1457e535-9d02-4014-9883-7618f41bed84
+      * Infinite Tower (Start): 60ed7d69-2cac-467c-9695-6ab3e77159b9
+      * Infinite Tower (Ende): 23fb560d-73d0-404a-8dda-bf8088b08f0a
+      * Infinite Tower (Pause): 5bdb0ab8-610f-4823-9e57-4cd48a5c4eb8
+      * Exploration (Deploy): 4971f60f-90ff-4142-bf88-5395122136c2
+      * Exploration (Claim): e82eeec1-ca38-4f7b-bf14-4b85df674c7b
+      * Shop: 41ccb1a6-1009-4e2f-924e-1b71f8020e9b
+      * Stats Upgrade: a0d1432a-262d-4b0a-9173-ee8b1dcfb69c
+    - Auto-Farm, Raid und Infinite Tower Funktionen angepasst
+    - Unterstützung für neue Enemy IDs und Endpoints hinzugefügt
+]]
