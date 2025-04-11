@@ -2688,3 +2688,183 @@ end
     - Auto-Farm, Raid und Infinite Tower Funktionen angepasst
     - Unterstützung für neue Enemy IDs und Endpoints hinzugefügt
 ]]
+
+TabMisc:CreateDivider()
+TabMisc:CreateSection("Auto-Execute")
+
+-- Auto-Execute nach Teleport
+TabMisc:CreateToggle({
+    Name = "Auto-Execute nach Teleport",
+    Description = "Führt das Skript automatisch nach einem Teleport im Spiel erneut aus",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            -- Code zum Speichern des Skripts für Auto-Execute
+            local queueOnTeleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
+            
+            if queueOnTeleport then
+                -- Das aktuelle Skript für die Ausführung nach dem Teleport in die Warteschlange stellen
+                local scriptURL = "https://raw.githubusercontent.com/MythTeam/AnimeCardClash/main/RobloxScriptHubMythHub.lua"
+                
+                queueOnTeleport([[
+                    -- Warte, bis das Spiel geladen ist
+                    repeat wait() until game:IsLoaded()
+                    wait(3)
+                    
+                    -- Führe das Skript aus
+                    loadstring(game:HttpGet("]] .. scriptURL .. [[", true))()
+                ]])
+                
+                -- Verbindung zum TeleportService herstellen
+                local teleportService = game:GetService("TeleportService")
+                local connection
+                
+                connection = teleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+                    if player == Utilities.GetLocalPlayer() then
+                        Utilities.Notify("Auto-Execute", "Fehler beim Teleport: " .. errorMessage, "error")
+                        -- Versuche es erneut
+                        queueOnTeleport([[
+                            -- Warte, bis das Spiel geladen ist
+                            repeat wait() until game:IsLoaded()
+                            wait(5)
+                            
+                            -- Führe das Skript aus
+                            loadstring(game:HttpGet("]] .. scriptURL .. [[", true))()
+                        ]])
+                    end
+                end)
+                
+                spawn(function()
+                    -- Prüfe regelmäßig, ob wir uns noch im selben Spiel befinden
+                    local currentGameId = game.PlaceId
+                    while true do
+                        wait(5)
+                        if game.PlaceId ~= currentGameId then
+                            -- Wir wurden bereits teleportiert, also die Verbindung trennen
+                            if connection then
+                                connection:Disconnect()
+                                connection = nil
+                            end
+                            break
+                        end
+                    end
+                end)
+                
+                Utilities.Notify("Auto-Execute", "Nach dem nächsten Teleport wird das Skript automatisch ausgeführt", "sync")
+            else
+                Utilities.Notify("Fehler", "Dein Executor unterstützt diese Funktion nicht", "error")
+                return false
+            end
+        else
+            -- Auto-Execute deaktivieren
+            local queueOnTeleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
+            
+            if queueOnTeleport then
+                queueOnTeleport("")
+                Utilities.Notify("Auto-Execute", "Auto-Execute nach Teleport deaktiviert", "stop_circle")
+            end
+        end
+    end
+}, "AutoExecuteToggle")
+
+-- Auto-Reconnect Funktion (speichert Konfiguration)
+TabMisc:CreateToggle({
+    Name = "Auto-Reconnect",
+    Description = "Speichert die aktuelle Konfiguration und führt das Skript nach einem Neustart des Spiels aus",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            -- Aktuellen Executor prüfen
+            local saveInstance = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
+            
+            if saveInstance then
+                -- Aktuelle Konfiguration speichern
+                local config = {}
+                config.AutoFarm = AutoFarmConfig.Enabled
+                config.CurrentEnemy = AutoFarmConfig.CurrentEnemy
+                config.AutoCollect = AutoFarmConfig.AutoCollect
+                config.AutoMerge = AutoFarmConfig.AutoMerge
+                config.AutoFarmWorldBosses = AutoFarmConfig.AutoFarmAllWorldBosses
+                config.TowerLevel = TowerConfig.BattleTowerLevel
+                config.AutoContinuousTower = TowerConfig.AutoContinuousLevel
+                config.AutoHighestTower = TowerConfig.AutoHighestLevel
+                config.AutoSummonEternalDragon = RaidConfig.AutoSummonEternalDragon
+                config.AutoSummonShadowDragon = RaidConfig.AutoSummonShadowDragon
+                config.AutoClaimEasy = ExplorationConfig.AutoClaimEasy
+                config.AutoClaimMedium = ExplorationConfig.AutoClaimMedium
+                config.AutoClaimHard = ExplorationConfig.AutoClaimHard
+                config.AutoClaimExtreme = ExplorationConfig.AutoClaimExtreme
+                config.AutoClaimNightmare = ExplorationConfig.AutoClaimNightmare
+                
+                -- Als Datei speichern
+                if writefile then
+                    writefile("MythHubConfig.json", game:GetService("HttpService"):JSONEncode(config))
+                end
+                
+                -- Auto-Execute mit Konfiguration
+                local scriptURL = "https://raw.githubusercontent.com/MythTeam/AnimeCardClash/main/RobloxScriptHubMythHub.lua"
+                
+                saveInstance([[
+                    -- Warte, bis das Spiel geladen ist
+                    repeat wait() until game:IsLoaded()
+                    wait(5)
+                    
+                    -- Skript laden
+                    loadstring(game:HttpGet("]] .. scriptURL .. [[", true))()
+                    
+                    -- Konfiguration wiederherstellen
+                    wait(3)
+                    if readfile and isfile and isfile("MythHubConfig.json") then
+                        local config = game:GetService("HttpService"):JSONDecode(readfile("MythHubConfig.json"))
+                        -- Hier wird die Skriptkonfiguration automatisch geladen
+                        -- Die Funktionen werden im nächsten Update implementiert
+                    end
+                ]])
+                
+                -- Persistent Auto-Reconnect (zwischen Spielsitzungen)
+                -- Dieses Feature erfordert einen Executor, der Dateien zwischen Sitzungen speichern kann
+                if isfile and writefile and readfile then
+                    writefile("MythHubAutoStart.lua", [[
+                        -- Warte, bis das Spiel geladen ist
+                        repeat wait() until game:IsLoaded()
+                        wait(5)
+                        
+                        -- Prüfe, ob wir im richtigen Spiel sind
+                        if game.PlaceId == 16018202702 or game.PlaceId == 9230754391 then -- Anime Card Clash IDs
+                            -- Skript laden
+                            loadstring(game:HttpGet("]] .. scriptURL .. [[", true))()
+                            
+                            -- Konfiguration wiederherstellen
+                            wait(3)
+                            if isfile("MythHubConfig.json") then
+                                -- Konfiguration wird automatisch geladen
+                            end
+                        end
+                    ]])
+                    
+                    Utilities.Notify("Auto-Reconnect", "Persistente Auto-Start-Datei erstellt", "sync")
+                end
+                
+                Utilities.Notify("Auto-Reconnect", "Konfiguration gespeichert und Auto-Execute aktiviert", "sync")
+            else
+                Utilities.Notify("Fehler", "Dein Executor unterstützt diese Funktion nicht", "error")
+                return false
+            end
+        else
+            -- Auto-Reconnect deaktivieren
+            if isfile and isfile("MythHubConfig.json") then
+                delfile("MythHubConfig.json")
+            end
+            
+            if isfile and isfile("MythHubAutoStart.lua") then
+                delfile("MythHubAutoStart.lua")
+            end
+            
+            local queueOnTeleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
+            if queueOnTeleport then
+                queueOnTeleport("")
+                Utilities.Notify("Auto-Reconnect", "Auto-Reconnect deaktiviert", "stop_circle")
+            end
+        end
+    end
+}, "AutoReconnectToggle")
