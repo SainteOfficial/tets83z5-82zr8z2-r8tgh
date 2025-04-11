@@ -3503,12 +3503,35 @@ Utilities.SendInventoryWebhook = function()
         -- Notwendige Module importieren
         local ReplicatedStorage = game:GetService("ReplicatedStorage")
         local RuntimeLib = require(ReplicatedStorage:WaitForChild("rbxts_include"):WaitForChild("RuntimeLib"))
-        local LocalUser = RuntimeLib.import(script, ReplicatedStorage, "TS", "user", "local", "local-user").LocalUser
-        local ItemsWithId = RuntimeLib.import(script, ReplicatedStorage, "TS", "item", "items").ItemsWithId
-        local ItemCategory = RuntimeLib.import(script, ReplicatedStorage, "TS", "item", "item-category").ItemCategory
-        local Rarity = RuntimeLib.import(script, ReplicatedStorage, "TS", "rarity").Rarity
         
-        -- Kategorie-Emojis
+        -- Check if modules exist before importing
+        if not ReplicatedStorage or not RuntimeLib then
+            warn("Required modules not found for inventory webhook")
+            return false
+        end
+        
+        -- Safe import with error handling
+        local LocalUser, ItemsWithId, ItemCategory, Rarity
+        
+        local importSuccess, importError = pcall(function()
+            LocalUser = RuntimeLib.import(script, ReplicatedStorage, "TS", "user", "local", "local-user").LocalUser
+            ItemsWithId = RuntimeLib.import(script, ReplicatedStorage, "TS", "item", "items").ItemsWithId
+            ItemCategory = RuntimeLib.import(script, ReplicatedStorage, "TS", "item", "item-category").ItemCategory
+            Rarity = RuntimeLib.import(script, ReplicatedStorage, "TS", "rarity").Rarity
+        end)
+        
+        if not importSuccess then
+            warn("Failed to import modules: " .. tostring(importError))
+            return false
+        end
+        
+        -- Validate imported modules
+        if not LocalUser or not LocalUser.atomMap or not LocalUser.atomMap.player or not ItemsWithId then
+            warn("Required game modules missing or invalid")
+            return false
+        end
+        
+        -- Category emojis
         local CATEGORY_EMOJIS = {
             POTION = "🧪",
             TRAIT = "🧬",
@@ -3521,7 +3544,7 @@ Utilities.SendInventoryWebhook = function()
             MISC = "📦"
         }
         
-        -- Seltenheits-Emojis
+        -- Rarity emojis
         local RARITY_EMOJIS = {
             COMMON = "⚪",
             UNCOMMON = "🟢",
@@ -3531,49 +3554,78 @@ Utilities.SendInventoryWebhook = function()
             MYTHIC = "🔴"
         }
         
-        -- Gibt das passende Emoji für eine Kategorie zurück
+        -- Returns the matching emoji for a category
         local function getCategoryEmoji(categoryName)
+            if not categoryName then return "❓" end
             return CATEGORY_EMOJIS[categoryName] or "❓"
         end
         
-        -- Gibt das passende Emoji für eine Seltenheit zurück
+        -- Returns the matching emoji for a rarity
         local function getRarityEmoji(rarityName)
+            if not rarityName then return "❓" end
             return RARITY_EMOJIS[rarityName] or "❓"
-        }
+        end
         
-        -- Backpack-Items aus der Atom-Map abrufen
-        local backpackItems = LocalUser.atomMap.player().backpack.items
+        -- Safely get backpack items from the atom map
+        local backpackItems = {}
+        local getBackpackSuccess, getBackpackError = pcall(function()
+            if LocalUser and LocalUser.atomMap and LocalUser.atomMap.player and LocalUser.atomMap.player().backpack then
+                backpackItems = LocalUser.atomMap.player().backpack.items or {}
+            end
+        end)
         
-        -- Prüfen, ob Items vorhanden sind
+        if not getBackpackSuccess then
+            warn("Failed to get backpack items: " .. tostring(getBackpackError))
+            return false
+        end
+        
+        -- Check if items exist
         local itemCount = 0
         for _ in pairs(backpackItems) do
             itemCount = itemCount + 1
         end
         
-        -- Items nach Kategorie sortieren
+        -- Sort items by category
         local categorizedItems = {}
         
         for itemId, itemData in pairs(backpackItems) do
-            local itemInfo = ItemsWithId[itemId]
-            if itemInfo then
-                local categoryName = (itemInfo.category and itemInfo.category.name) or "UNKNOWN"
-                
-                if not categorizedItems[categoryName] then
-                    categorizedItems[categoryName] = {}
+            if itemId and itemData and ItemsWithId and ItemsWithId[itemId] then
+                local itemInfo = ItemsWithId[itemId]
+                if itemInfo then
+                    local categoryName = (itemInfo.category and itemInfo.category.name) or "UNKNOWN"
+                    
+                    if not categorizedItems[categoryName] then
+                        categorizedItems[categoryName] = {}
+                    end
+                    
+                    table.insert(categorizedItems[categoryName], {
+                        id = itemId,
+                        info = itemInfo,
+                        data = itemData
+                    })
                 end
-                
-                table.insert(categorizedItems[categoryName], {
-                    id = itemId,
-                    info = itemInfo,
-                    data = itemData
-                })
             end
         end
         
         -- Get current timestamp and player name with spoiler tags
         local currentTime = os.time()
         local formattedTime = os.date("%Y-%m-%d %H:%M:%S", currentTime)
-        local playerName = Utilities.GetLocalPlayer().Name
+        
+        -- Safely get player name
+        local playerName = "Unknown"
+        local getPlayerSuccess, getPlayerError = pcall(function()
+            if Utilities and Utilities.GetLocalPlayer then
+                local player = Utilities.GetLocalPlayer()
+                if player and player.Name then
+                    playerName = player.Name
+                end
+            end
+        end)
+        
+        if not getPlayerSuccess then
+            warn("Failed to get player name: " .. tostring(getPlayerError))
+        end
+        
         local maskedUsername = "||<" .. playerName .. ">||"
         
         -- Prepare output for Discord
@@ -3591,31 +3643,42 @@ Utilities.SendInventoryWebhook = function()
             timestamp = DateTime.now():ToIsoDate()
         }
         
-        -- Add equipped items
+        -- Add equipped items with error handling
         local equippedField = {
             name = "🎽 **Equipped Items**",
             value = "",
             inline = false
         }
         
-        local equippedTitle = LocalUser.backpack:getEquippedTitle()
-        local equippedEquipment = LocalUser.backpack:getEquippedEquipment()
-        local equippedArtifact = LocalUser.backpack:getEquippedArtifact()
+        local equippedTitle, equippedEquipment, equippedArtifact
         
-        if equippedTitle then
-            equippedField.value = equippedField.value .. "👑 **Title:** " .. equippedTitle.item.name .. "\n"
-        end
+        local getEquippedSuccess, getEquippedError = pcall(function()
+            if LocalUser and LocalUser.backpack then
+                equippedTitle = LocalUser.backpack:getEquippedTitle()
+                equippedEquipment = LocalUser.backpack:getEquippedEquipment()
+                equippedArtifact = LocalUser.backpack:getEquippedArtifact()
+            end
+        end)
         
-        if equippedEquipment then
-            equippedField.value = equippedField.value .. "⚔️ **Equipment:** " .. equippedEquipment.item.name .. "\n"
-        end
-        
-        if equippedArtifact then
-            equippedField.value = equippedField.value .. "🔮 **Artifact:** " .. equippedArtifact.item.name .. "\n"
-        end
-        
-        if equippedField.value == "" then
-            equippedField.value = "*No items equipped*"
+        if not getEquippedSuccess then
+            warn("Failed to get equipped items: " .. tostring(getEquippedError))
+            equippedField.value = "*Error retrieving equipped items*"
+        else
+            if equippedTitle and equippedTitle.item and equippedTitle.item.name then
+                equippedField.value = equippedField.value .. "👑 **Title:** " .. equippedTitle.item.name .. "\n"
+            end
+            
+            if equippedEquipment and equippedEquipment.item and equippedEquipment.item.name then
+                equippedField.value = equippedField.value .. "⚔️ **Equipment:** " .. equippedEquipment.item.name .. "\n"
+            end
+            
+            if equippedArtifact and equippedArtifact.item and equippedArtifact.item.name then
+                equippedField.value = equippedField.value .. "🔮 **Artifact:** " .. equippedArtifact.item.name .. "\n"
+            end
+            
+            if equippedField.value == "" then
+                equippedField.value = "*No items equipped*"
+            end
         end
         
         table.insert(mainEmbed.fields, equippedField)
@@ -3641,28 +3704,38 @@ Utilities.SendInventoryWebhook = function()
             }
             
             -- Sort items by rarity and name
-            table.sort(items, function(a, b)
-                if (a.info.rarity and b.info.rarity and a.info.rarity.value ~= b.info.rarity.value) then
-                    return (a.info.rarity.value or 0) > (b.info.rarity.value or 0)
-                end
-                return (a.info.name or "") < (b.info.name or "")
+            local sortSuccess, sortError = pcall(function()
+                table.sort(items, function(a, b)
+                    if not a or not b or not a.info or not b.info then return false end
+                    
+                    if (a.info.rarity and b.info.rarity and a.info.rarity.value ~= b.info.rarity.value) then
+                        return (a.info.rarity.value or 0) > (b.info.rarity.value or 0)
+                    end
+                    return (a.info.name or "") < (b.info.name or "")
+                end)
             end)
+            
+            if not sortSuccess then
+                warn("Failed to sort items: " .. tostring(sortError))
+            end
             
             -- Maximum 10 items per category (Discord limit)
             local itemsToShow = math.min(10, #items)
             for i = 1, itemsToShow do
                 local item = items[i]
-                local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
-                local rarityEmoji = getRarityEmoji(rarityName)
-                local equipped = (item.data.equipped and "✅") or ""
-                
-                categoryField.value = categoryField.value .. string.format(
-                    "%s **%s** (×%d) %s\n",
-                    rarityEmoji,
-                    item.info.name,
-                    item.data.quantity or 0,
-                    equipped
-                )
+                if item and item.info and item.data then
+                    local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
+                    local rarityEmoji = getRarityEmoji(rarityName)
+                    local equipped = (item.data.equipped and "✅") or ""
+                    
+                    categoryField.value = categoryField.value .. string.format(
+                        "%s **%s** (×%d) %s\n",
+                        rarityEmoji,
+                        item.info.name or "Unknown Item",
+                        item.data.quantity or 0,
+                        equipped
+                    )
+                end
             end
             
             -- If more than 10 items, show "and X more..."
@@ -3686,7 +3759,7 @@ Utilities.SendInventoryWebhook = function()
             color = 15844367, -- Discord Gold
             fields = {},
             footer = {
-                text = "MythHub Premium | " .. os.date("%Y-%m-%d %H:%M:%S", os.time())
+                text = "MythHub Premium | " .. formattedTime
             }
         }
         
@@ -3697,10 +3770,12 @@ Utilities.SendInventoryWebhook = function()
             local rareItems = {}
             
             for _, item in ipairs(items) do
-                local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
-                if rarityName == "LEGENDARY" or rarityName == "MYTHIC" then
-                    table.insert(rareItems, item)
-                    foundRareItems = true
+                if item and item.info and item.info.rarity and item.info.rarity.name then
+                    local rarityName = item.info.rarity.name
+                    if rarityName == "LEGENDARY" or rarityName == "MYTHIC" then
+                        table.insert(rareItems, item)
+                        foundRareItems = true
+                    end
                 end
             end
             
@@ -3713,25 +3788,35 @@ Utilities.SendInventoryWebhook = function()
                 }
                 
                 -- Sort by rarity
-                table.sort(rareItems, function(a, b)
-                    if (a.info.rarity and b.info.rarity and a.info.rarity.value ~= b.info.rarity.value) then
-                        return (a.info.rarity.value or 0) > (b.info.rarity.value or 0)
-                    end
-                    return (a.info.name or "") < (b.info.name or "")
+                local sortSuccess, sortError = pcall(function()
+                    table.sort(rareItems, function(a, b)
+                        if not a or not b or not a.info or not b.info then return false end
+                        
+                        if (a.info.rarity and b.info.rarity and a.info.rarity.value ~= b.info.rarity.value) then
+                            return (a.info.rarity.value or 0) > (b.info.rarity.value or 0)
+                        end
+                        return (a.info.name or "") < (b.info.name or "")
+                    end)
                 end)
                 
+                if not sortSuccess then
+                    warn("Failed to sort rare items: " .. tostring(sortError))
+                end
+                
                 for _, item in ipairs(rareItems) do
-                    local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
-                    local rarityEmoji = getRarityEmoji(rarityName)
-                    local equipped = (item.data.equipped and "✅") or ""
-                    
-                    rareItemsField.value = rareItemsField.value .. string.format(
-                        "%s **%s** (×%d) %s\n",
-                        rarityEmoji,
-                        item.info.name,
-                        item.data.quantity or 0,
-                        equipped
-                    )
+                    if item and item.info and item.data then
+                        local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
+                        local rarityEmoji = getRarityEmoji(rarityName)
+                        local equipped = (item.data.equipped and "✅") or ""
+                        
+                        rareItemsField.value = rareItemsField.value .. string.format(
+                            "%s **%s** (×%d) %s\n",
+                            rarityEmoji,
+                            item.info.name or "Unknown Item",
+                            item.data.quantity or 0,
+                            equipped
+                        )
+                    end
                 end
                 
                 table.insert(rareItemsEmbed.fields, rareItemsField)
@@ -3766,9 +3851,11 @@ Utilities.SendInventoryWebhook = function()
         
         for _, items in pairs(categorizedItems) do
             for _, item in ipairs(items) do
-                local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
-                if rarityStats[rarityName] then
-                    rarityStats[rarityName] = rarityStats[rarityName] + (item.data.quantity or 1)
+                if item and item.info and item.info.rarity and item.info.rarity.name and item.data then
+                    local rarityName = item.info.rarity.name
+                    if rarityStats[rarityName] then
+                        rarityStats[rarityName] = rarityStats[rarityName] + (item.data.quantity or 1)
+                    end
                 end
             end
         end
