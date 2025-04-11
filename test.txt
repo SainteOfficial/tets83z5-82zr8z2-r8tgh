@@ -3514,7 +3514,17 @@ Utilities.SendInventoryWebhook = function()
             INSTANT_ROLL = "🎲",
             CARD_BACK = "🎴",
             RAID = "🏯",
-            MISC = "📦"
+            MISC = "📦",
+            -- Zusätzliche Varianten für verschiedene Schreibweisen
+            ["Potion"] = "🧪",
+            ["Trait"] = "⚛️",
+            ["Title"] = "👑",
+            ["Equipment"] = "🗡️",
+            ["Artifact"] = "🔮",
+            ["Instant Roll"] = "🎲",
+            ["Card Back"] = "🎴",
+            ["Raid"] = "🏯",
+            ["Misc"] = "📦"
         }
         
         -- Rarity emojis
@@ -3553,7 +3563,42 @@ Utilities.SendInventoryWebhook = function()
         -- Returns the matching emoji for a category
         local function getCategoryEmoji(categoryName)
             if not categoryName then return "❓" end
-            return CATEGORY_EMOJIS[categoryName] or "❓"
+            
+            -- Debug-Ausgabe zur Hilfe beim Finden des Problems
+            warn("Kategoriename: " .. tostring(categoryName))
+            
+            -- Versuche verschiedene Formatierungen
+            local emoji = CATEGORY_EMOJIS[categoryName] -- Exakter Match
+            
+            if not emoji then
+                -- Versuche Uppercase
+                emoji = CATEGORY_EMOJIS[string.upper(categoryName)]
+            end
+            
+            if not emoji then
+                -- Fallback auf feste Zuordnung basierend auf Namen
+                if string.find(categoryName:lower(), "potion") then
+                    return "🧪"
+                elseif string.find(categoryName:lower(), "trait") then
+                    return "⚛️"
+                elseif string.find(categoryName:lower(), "title") then
+                    return "👑"
+                elseif string.find(categoryName:lower(), "equipment") then
+                    return "🗡️"
+                elseif string.find(categoryName:lower(), "artifact") then
+                    return "🔮"
+                elseif string.find(categoryName:lower(), "instant") or string.find(categoryName:lower(), "roll") then
+                    return "🎲"
+                elseif string.find(categoryName:lower(), "card") or string.find(categoryName:lower(), "back") then
+                    return "🎴"
+                elseif string.find(categoryName:lower(), "raid") then
+                    return "🏯"
+                elseif string.find(categoryName:lower(), "misc") then
+                    return "📦"
+                end
+            end
+            
+            return emoji or "❓" -- Fallback auf Fragezeichen
         end
         
         -- Returns the matching emoji for a rarity
@@ -3925,7 +3970,7 @@ Utilities.SendInventoryWebhook = function()
                 
                 categoryField.value = categoryField.value .. string.format(
                     "%s **%s** (×%d)%s\n",
-                    emoji, -- Verwende Kategorie-Emoji für alle Items
+                    emoji, -- Verwende Kategorie-Emoji für alle Items in dieser Kategorie
                     itemData.name,
                     itemData.quantity,
                     equipped
