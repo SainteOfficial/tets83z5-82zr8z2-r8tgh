@@ -911,7 +911,7 @@ local autofarm_toggle = TabAutoFarm:CreateToggle({
         AutoFarmConfig.Enabled = Value
         
         if Value then
-            Utilities.Notify("Auto Farm", "Started auto farming " .. AutoFarmConfig.CurrentEnemy .. " in " .. table.concat(AutoFarmConfig.SelectedWorlds, ", "), "auto_mode")
+            Utilities.Notify("Auto Farm", "Started auto farming " .. (AutoFarmConfig.SelectedWorlds and #AutoFarmConfig.SelectedWorlds > 0 and table.concat(AutoFarmConfig.SelectedWorlds, ", ") or "no worlds selected"), "auto_mode")
             
             if AutoFarmConfig.Connections.AutoFarm then
                 AutoFarmConfig.Connections.AutoFarm:Disconnect()
@@ -3833,7 +3833,7 @@ Utilities.SendInventoryWebhook = function()
             -- Create a nicer webhook title
             local currentDate = os.date("%m/%d/%Y", os.time())
             local webhookContent = "## 📋 MythHub Inventory Report - " .. currentDate .. "\n"
-            webhookContent = webhookContent .. "Player: " .. maskedUsername .. " | Items: " .. itemCount
+            webhookContent = webhookContent .. "Player: " .. maskedUsername .. " | Items: " .. tostring(itemCount)
             
             -- Improved webhook message with avatar and username
             -- Add the file directly as an attachment
@@ -3914,7 +3914,7 @@ Utilities.SendInventoryWebhook = function()
                     if success and body and body.id then
                         WebhookConfig.LastMessageID = body.id
                         -- Debug-Info
-                        warn("Neue Webhook-Nachricht ID gespeichert: " .. body.id)
+                        warn("New webhook message ID saved: " .. tostring(body.id))
                     end
                 end
             end)
