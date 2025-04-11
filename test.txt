@@ -3554,6 +3554,29 @@ Utilities.SendInventoryWebhook = function()
             MYTHIC = "🔴"
         }
         
+        -- Definiere RARITY_NAMES für eine bessere Anzeige
+        local RARITY_NAMES = {
+            COMMON = "Gewöhnlich",
+            UNCOMMON = "Ungewöhnlich",
+            RARE = "Selten",
+            EPIC = "Episch",
+            LEGENDARY = "Legendär",
+            MYTHIC = "Mythisch"
+        }
+        
+        -- Definiere Kategoriefarben für Embeds
+        local categoryColors = {
+            POTION = 0x3498DB,    -- Blau
+            TRAIT = 0x1ABC9C,     -- Türkis
+            TITLE = 0xF1C40F,     -- Gold
+            EQUIPMENT = 0xE74C3C, -- Rot
+            ARTIFACT = 0x9B59B6,  -- Lila
+            INSTANT_ROLL = 0x2ECC71, -- Grün
+            CARD_BACK = 0xE67E22, -- Orange
+            RAID = 0x34495E,      -- Dunkelblau
+            MISC = 0x95A5A6       -- Grau
+        }
+        
         -- Returns the matching emoji for a category
         local function getCategoryEmoji(categoryName)
             if not categoryName then return "❓" end
@@ -3680,15 +3703,16 @@ Utilities.SendInventoryWebhook = function()
             warn("Failed to get equipped items: " .. tostring(getEquippedError))
             equippedField.value = "*Error retrieving equipped items*"
         else
-            if equippedTitle and equippedTitle.item and equippedTitle.item.name then
+            -- Verbesserte Null-Prüfungen für Ausrüstungsgegenstände
+            if equippedTitle and type(equippedTitle) == "table" and equippedTitle.item and type(equippedTitle.item) == "table" and equippedTitle.item.name then
                 equippedField.value = equippedField.value .. "👑 **Title:** " .. equippedTitle.item.name .. "\n"
             end
             
-            if equippedEquipment and equippedEquipment.item and equippedEquipment.item.name then
+            if equippedEquipment and type(equippedEquipment) == "table" and equippedEquipment.item and type(equippedEquipment.item) == "table" and equippedEquipment.item.name then
                 equippedField.value = equippedField.value .. "⚔️ **Equipment:** " .. equippedEquipment.item.name .. "\n"
             end
             
-            if equippedArtifact and equippedArtifact.item and equippedArtifact.item.name then
+            if equippedArtifact and type(equippedArtifact) == "table" and equippedArtifact.item and type(equippedArtifact.item) == "table" and equippedArtifact.item.name then
                 equippedField.value = equippedField.value .. "🔮 **Artifact:** " .. equippedArtifact.item.name .. "\n"
             end
             
@@ -3987,55 +4011,66 @@ Utilities.SendInventoryWebhook = function()
             -- Fügt die Datei direkt als Anhang hinzu
             local fileData
             
-            -- Versuche, die Logo-Datei zu lesen
+            -- Verbesserte Fehlerbehandlung für die Logo-Datei
             local readSuccess, readResult = pcall(function()
                 if isfile and readfile and isfile("MYTHLOGO.png") then
                     return readfile("MYTHLOGO.png")
+                elseif getsynasset and readfile and isfile("MYTHLOGO.png") then
+                    -- Alternative für Synapse X
+                    return readfile("MYTHLOGO.png") 
                 end
                 return nil
             end)
             
             if readSuccess and readResult then
                 fileData = readResult
+            else
+                warn("Logo-Datei konnte nicht gelesen werden. Verwende alternatives Logo.")
             end
             
             -- HTTP Request mit Dateianhang (falls verfügbar)
-            if fileData then
-                httpRequest({
-                    Url = WebhookConfig.URL,
-                    Method = "POST",
-                    Headers = {
-                        ["Content-Type"] = "multipart/form-data; boundary=---------------------------boundary"
-                    },
-                    Body = "---------------------------boundary\r\n" ..
-                          'Content-Disposition: form-data; name="payload_json"\r\n' ..
-                          "Content-Type: application/json\r\n\r\n" ..
-                          HttpService:JSONEncode({
-                              username = "MythHub Inventory System",
-                              content = webhookContent,
-                              embeds = embeds
-                          }) .. "\r\n" ..
-                          "---------------------------boundary\r\n" ..
-                          'Content-Disposition: form-data; name="file"; filename="MYTHLOGO.png"\r\n' ..
-                          "Content-Type: image/png\r\n\r\n" ..
-                          fileData .. "\r\n" ..
-                          "---------------------------boundary--\r\n"
-                })
-            else
-                -- Fallback ohne Dateianhang
-                httpRequest({
-                    Url = WebhookConfig.URL,
-                    Method = "POST",
-                    Headers = {
-                        ["Content-Type"] = "application/json"
-                    },
-                    Body = HttpService:JSONEncode({
-                        username = "MythHub Inventory System",
-                        avatar_url = "https://i.imgur.com/jVJ9q32.png", -- Fallback
-                        content = webhookContent,
-                        embeds = embeds
+            local requestSuccess, requestError = pcall(function()
+                if fileData then
+                    httpRequest({
+                        Url = WebhookConfig.URL,
+                        Method = "POST",
+                        Headers = {
+                            ["Content-Type"] = "multipart/form-data; boundary=---------------------------boundary"
+                        },
+                        Body = "---------------------------boundary\r\n" ..
+                              'Content-Disposition: form-data; name="payload_json"\r\n' ..
+                              "Content-Type: application/json\r\n\r\n" ..
+                              HttpService:JSONEncode({
+                                  username = "MythHub Inventory System",
+                                  content = webhookContent,
+                                  embeds = embeds
+                              }) .. "\r\n" ..
+                              "---------------------------boundary\r\n" ..
+                              'Content-Disposition: form-data; name="file"; filename="MYTHLOGO.png"\r\n' ..
+                              "Content-Type: image/png\r\n\r\n" ..
+                              fileData .. "\r\n" ..
+                              "---------------------------boundary--\r\n"
                     })
-                })
+                else
+                    -- Fallback ohne Dateianhang
+                    httpRequest({
+                        Url = WebhookConfig.URL,
+                        Method = "POST",
+                        Headers = {
+                            ["Content-Type"] = "application/json"
+                        },
+                        Body = HttpService:JSONEncode({
+                            username = "MythHub Inventory System",
+                            avatar_url = "https://i.imgur.com/jVJ9q32.png", -- Fallback
+                            content = webhookContent,
+                            embeds = embeds
+                        })
+                    })
+                end
+            end)
+            
+            if not requestSuccess then
+                warn("Webhook request failed: " .. tostring(requestError))
             end
             
             return true
