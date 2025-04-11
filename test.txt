@@ -3308,6 +3308,22 @@ WebhookConfig.UpdateConnections = function()
     if WebhookConfig.Enabled then
         connectItemDrops()
         connectRaidCompletion()
+        
+        -- Check if inventory webhook is enabled with continuous updates
+        if WebhookConfig.InventorySendEnabled and not WebhookConfig.Connections.InventorySender then
+            WebhookConfig.Connections.InventorySender = spawn(function()
+                while WebhookConfig.InventorySendEnabled do
+                    -- Sende/aktualisiere das Inventar 
+                    Utilities.SendInventoryWebhook()
+                    
+                    -- Kurze Verzögerung, um Discord-Ratelimits zu vermeiden
+                    wait(5) -- Update alle 5 Sekunden
+                end
+            end)
+            
+            -- Debug-Info
+            warn("Inventory Webhook mit kontinuierlichen Updates aktiviert!")
+        end
     else
         -- Verbindungen trennen, wenn deaktiviert
         if WebhookConfig.Connections.ItemDrops then
@@ -3318,6 +3334,11 @@ WebhookConfig.UpdateConnections = function()
         if WebhookConfig.Connections.RaidCompletion then
             WebhookConfig.Connections.RaidCompletion:Disconnect()
             WebhookConfig.Connections.RaidCompletion = nil
+        end
+        
+        if WebhookConfig.Connections.InventorySender then
+            WebhookConfig.Connections.InventorySender:Disconnect()
+            WebhookConfig.Connections.InventorySender = nil
         end
     end
 end
@@ -3384,6 +3405,7 @@ if WebhookConfig then
     - Auto-Execute nach Teleport hinzugefügt
     - Auto-Reconnect mit Konfigurationsspeicherung hinzugefügt
     - Discord Webhook-Integration hinzugefügt
+    - Inventar-Webhook mit Live-Updates implementiert
     ]]
     
     -- Aktualisiere das Änderungsprotokoll am Ende des Skripts
@@ -3965,6 +3987,9 @@ Utilities.SendInventoryWebhook = function()
                 )
             end
             
+            -- Füge einen Zeilenumbruch nach jedem Kategorie-Feld hinzu
+            categoryField.value = "\n" .. categoryField.value
+            
             -- Füge das Feld zum Embed hinzu, wenn es Inhalt hat
             if categoryField.value ~= "" then
                 table.insert(statsEmbed.fields, categoryField)
@@ -4028,18 +4053,20 @@ Utilities.SendInventoryWebhook = function()
             
             -- HTTP Request mit Dateianhang (falls verfügbar)
             local requestSuccess, requestError = pcall(function()
+                -- Webhook-URL und Methode vorbereiten
+                local method = "POST"  -- Standard: Neue Nachricht erstellen
+                local url = WebhookConfig.URL
+                
+                -- Wenn bereits eine Message-ID gespeichert ist, aktualisiere diese statt eine neue zu senden
+                if WebhookConfig.LastMessageID then
+                    method = "PATCH"  -- PATCH zum Aktualisieren einer existierenden Nachricht
+                    url = WebhookConfig.URL .. "/messages/" .. WebhookConfig.LastMessageID
+                end
+                
+                local response
+                
                 if fileData then
-                    -- Wenn bereits eine Webhook-MessageID vorhanden ist, aktualisiere statt neu zu senden
-                    local method = "POST"
-                    local url = WebhookConfig.URL
-                    
-                    -- Falls eine Message-ID gespeichert ist und wir die Nachricht aktualisieren wollen
-                    if WebhookConfig.LastMessageID then
-                        method = "PATCH"
-                        url = WebhookConfig.URL .. "/messages/" .. WebhookConfig.LastMessageID
-                    end
-                    
-                    local response = httpRequest({
+                    response = httpRequest({
                         Url = url,
                         Method = method,
                         Headers = {
@@ -4059,26 +4086,9 @@ Utilities.SendInventoryWebhook = function()
                               fileData .. "\r\n" ..
                               "---------------------------boundary--\r\n"
                     })
-                    
-                    -- Bei neuer Nachricht, Message-ID speichern
-                    if method == "POST" and response and response.Body then
-                        local success, body = pcall(function() return HttpService:JSONDecode(response.Body) end)
-                        if success and body and body.id then
-                            WebhookConfig.LastMessageID = body.id
-                        end
-                    end
                 else
                     -- Fallback ohne Dateianhang
-                    local method = "POST"
-                    local url = WebhookConfig.URL
-                    
-                    -- Falls eine Message-ID gespeichert ist und wir die Nachricht aktualisieren wollen
-                    if WebhookConfig.LastMessageID then
-                        method = "PATCH"
-                        url = WebhookConfig.URL .. "/messages/" .. WebhookConfig.LastMessageID
-                    end
-                    
-                    local response = httpRequest({
+                    response = httpRequest({
                         Url = url,
                         Method = method,
                         Headers = {
@@ -4091,13 +4101,15 @@ Utilities.SendInventoryWebhook = function()
                             embeds = embeds
                         })
                     })
-                    
-                    -- Bei neuer Nachricht, Message-ID speichern
-                    if method == "POST" and response and response.Body then
-                        local success, body = pcall(function() return HttpService:JSONDecode(response.Body) end)
-                        if success and body and body.id then
-                            WebhookConfig.LastMessageID = body.id
-                        end
+                end
+                
+                -- Speichere Message-ID für künftige Updates
+                if method == "POST" and response and response.Body then
+                    local success, body = pcall(function() return HttpService:JSONDecode(response.Body) end)
+                    if success and body and body.id then
+                        WebhookConfig.LastMessageID = body.id
+                        -- Debug-Info
+                        warn("Neue Webhook-Nachricht ID gespeichert: " .. body.id)
                     end
                 end
             end)
@@ -4116,63 +4128,3 @@ Utilities.SendInventoryWebhook = function()
         warn("Inventory webhook failed: " .. tostring(result))
     end
 end
-
--- Update connections
-WebhookConfig.UpdateConnections = function()
-    if WebhookConfig.Enabled then
-        connectItemDrops()
-        connectRaidCompletion()
-        
-        -- Check if inventory webhook is enabled with continuous updates
-        if WebhookConfig.InventorySendEnabled and not WebhookConfig.Connections.InventorySender then
-            WebhookConfig.Connections.InventorySender = spawn(function()
-                while WebhookConfig.InventorySendEnabled do
-                    -- Sende Inventar zur kontinuierlichen Aktualisierung
-                    Utilities.SendInventoryWebhook()
-                    
-                    -- Kurze Verzögerung, um Discord-Ratelimits zu vermeiden
-                    wait(5) -- Update alle 5 Sekunden
-                end
-            end)
-        end
-    else
-        -- Verbindungen trennen, wenn deaktiviert
-        if WebhookConfig.Connections.ItemDrops then
-            WebhookConfig.Connections.ItemDrops:Disconnect()
-            WebhookConfig.Connections.ItemDrops = nil
-        end
-        
-        if WebhookConfig.Connections.RaidCompletion then
-            WebhookConfig.Connections.RaidCompletion:Disconnect()
-            WebhookConfig.Connections.RaidCompletion = nil
-        end
-        
-        if WebhookConfig.Connections.InventorySender then
-            WebhookConfig.Connections.InventorySender:Disconnect()
-            WebhookConfig.Connections.InventorySender = nil
-        end
-    end
-end
-
--- Aktualisiere das Änderungsprotokoll am Ende der Datei
-local changelogText = [[
-    ÄNDERUNGSPROTOKOLL - MAI 2025
-    
-    - Remote-Pfade von "3aA" auf "kQR" aktualisiert
-    - Remote-IDs für alle Funktionen aktualisiert:
-      * SummonEnemy: 8a63919a-217b-436a-9cfa-4b472d213bbb
-      * Battle Tower: 1457e535-9d02-4014-9883-7618f41bed84
-      * Infinite Tower (Start): 60ed7d69-2cac-467c-9695-6ab3e77159b9
-      * Infinite Tower (Ende): 23fb560d-73d0-404a-8dda-bf8088b08f0a
-      * Infinite Tower (Pause): 5bdb0ab8-610f-4823-9e57-4cd48a5c4eb8
-      * Exploration (Deploy): 4971f60f-90ff-4142-bf88-5395122136c2
-      * Exploration (Claim): e82eeec1-ca38-4f7b-bf14-4b85df674c7b
-      * Shop: 41ccb1a6-1009-4e2f-924e-1b71f8020e9b
-      * Stats Upgrade: a0d1432a-262d-4b0a-9173-ee8b1dcfb69c
-    - Auto-Farm, Raid und Infinite Tower Funktionen angepasst
-    - Unterstützung für neue Enemy IDs und Endpoints hinzugefügt
-    - Auto-Execute nach Teleport hinzugefügt
-    - Auto-Reconnect mit Konfigurationsspeicherung hinzugefügt
-    - Discord Webhook-Integration hinzugefügt
-    - Inventar-Webhook mit einstellbarem Intervall implementiert
-]]
