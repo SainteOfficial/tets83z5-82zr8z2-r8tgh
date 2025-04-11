@@ -3422,7 +3422,7 @@ TabMisc:CreateSection("Inventory Webhook")
 -- Inventar Webhook Toggle
 TabMisc:CreateToggle({
     Name = "Send Inventory via Webhook",
-    Description = "Regularly sends your inventory contents to the configured webhook",
+    Description = "Sends and continuously updates your inventory via webhook",
     CurrentValue = false,
     Callback = function(Value)
         WebhookConfig.InventorySendEnabled = Value
@@ -3433,26 +3433,13 @@ TabMisc:CreateToggle({
                 return false
             end
             
-            WebhookConfig.LastInventorySend = 0 -- Immediate sending when activated
+            -- Aktiviere Live-Aktualisierungen
+            WebhookConfig.UpdateConnections()
             
-            -- Starte Inventar-Sender, wenn noch nicht aktiv
-            if not WebhookConfig.Connections.InventorySender then
-                WebhookConfig.Connections.InventorySender = spawn(function()
-                    while WebhookConfig.InventorySendEnabled do
-                        local currentTime = os.time()
-                        
-                        -- Sende Inventar, wenn Intervall abgelaufen ist
-                        if currentTime - WebhookConfig.LastInventorySend >= WebhookConfig.InventoryInterval then
-                            Utilities.SendInventoryWebhook()
-                            WebhookConfig.LastInventorySend = currentTime
-                        end
-                        
-                        wait(1) -- Check every second
-                    end
-                end)
-            end
+            -- Sofort senden, wenn aktiviert
+            Utilities.SendInventoryWebhook()
             
-            Utilities.Notify("Webhook", "Inventory webhook enabled. Interval: " .. math.floor(WebhookConfig.InventoryInterval / 60) .. " minutes", "webhook")
+            Utilities.Notify("Webhook", "Inventory webhook enabled with live updates", "webhook")
         else
             if WebhookConfig.Connections.InventorySender then
                 WebhookConfig.Connections.InventorySender:Disconnect()
@@ -3463,19 +3450,6 @@ TabMisc:CreateToggle({
         end
     end
 }, "InventoryWebhookToggle")
-
--- Intervall Slider
-TabMisc:CreateSlider({
-    Name = "Interval (Minutes)",
-    Description = "Time between inventory webhook messages",
-    Range = {1, 60},
-    Increment = 1,
-    CurrentValue = 5,
-    Callback = function(Value)
-        WebhookConfig.InventoryInterval = Value * 60 -- Convert to seconds
-        Utilities.Notify("Webhook", "Inventory interval set to " .. Value .. " minutes", "webhook")
-    end
-}, "InventoryIntervalSlider")
 
 -- Button zum sofortigen Senden
 TabMisc:CreateButton({
@@ -3488,7 +3462,6 @@ TabMisc:CreateButton({
         end
         
         Utilities.SendInventoryWebhook()
-        WebhookConfig.LastInventorySend = os.time()
         Utilities.Notify("Webhook", "Inventory has been sent", "webhook")
     end
 })
@@ -4038,6 +4011,20 @@ Utilities.SendInventoryWebhook = function()
             end
         end
         
+        -- Füge eine Legende für die Symbole hinzu
+        local legendField = {
+            name = "ℹ️ **Legende**",
+            value = "✅ = Ausgerüstet/Equipped\n" ..
+                    "⚪ = Gewöhnlich/Common\n" ..
+                    "🟢 = Ungewöhnlich/Uncommon\n" ..
+                    "🔷 = Selten/Rare\n" ..
+                    "🟣 = Episch/Epic\n" ..
+                    "🟡 = Legendär/Legendary\n" ..
+                    "🔴 = Mythisch/Mythic",
+            inline = false
+        }
+        table.insert(statsEmbed.fields, legendField)
+        
         table.insert(embeds, statsEmbed)
         
         -- Versende Webhook mit verbessertem Design
@@ -4079,9 +4066,19 @@ Utilities.SendInventoryWebhook = function()
             -- HTTP Request mit Dateianhang (falls verfügbar)
             local requestSuccess, requestError = pcall(function()
                 if fileData then
-                    httpRequest({
-                        Url = WebhookConfig.URL,
-                        Method = "POST",
+                    -- Wenn bereits eine Webhook-MessageID vorhanden ist, aktualisiere statt neu zu senden
+                    local method = "POST"
+                    local url = WebhookConfig.URL
+                    
+                    -- Falls eine Message-ID gespeichert ist und wir die Nachricht aktualisieren wollen
+                    if WebhookConfig.LastMessageID then
+                        method = "PATCH"
+                        url = WebhookConfig.URL .. "/messages/" .. WebhookConfig.LastMessageID
+                    end
+                    
+                    local response = httpRequest({
+                        Url = url,
+                        Method = method,
                         Headers = {
                             ["Content-Type"] = "multipart/form-data; boundary=---------------------------boundary"
                         },
@@ -4099,11 +4096,28 @@ Utilities.SendInventoryWebhook = function()
                               fileData .. "\r\n" ..
                               "---------------------------boundary--\r\n"
                     })
+                    
+                    -- Bei neuer Nachricht, Message-ID speichern
+                    if method == "POST" and response and response.Body then
+                        local success, body = pcall(function() return HttpService:JSONDecode(response.Body) end)
+                        if success and body and body.id then
+                            WebhookConfig.LastMessageID = body.id
+                        end
+                    end
                 else
                     -- Fallback ohne Dateianhang
-                    httpRequest({
-                        Url = WebhookConfig.URL,
-                        Method = "POST",
+                    local method = "POST"
+                    local url = WebhookConfig.URL
+                    
+                    -- Falls eine Message-ID gespeichert ist und wir die Nachricht aktualisieren wollen
+                    if WebhookConfig.LastMessageID then
+                        method = "PATCH"
+                        url = WebhookConfig.URL .. "/messages/" .. WebhookConfig.LastMessageID
+                    end
+                    
+                    local response = httpRequest({
+                        Url = url,
+                        Method = method,
                         Headers = {
                             ["Content-Type"] = "application/json"
                         },
@@ -4114,6 +4128,14 @@ Utilities.SendInventoryWebhook = function()
                             embeds = embeds
                         })
                     })
+                    
+                    -- Bei neuer Nachricht, Message-ID speichern
+                    if method == "POST" and response and response.Body then
+                        local success, body = pcall(function() return HttpService:JSONDecode(response.Body) end)
+                        if success and body and body.id then
+                            WebhookConfig.LastMessageID = body.id
+                        end
+                    end
                 end
             end)
             
@@ -4138,19 +4160,15 @@ WebhookConfig.UpdateConnections = function()
         connectItemDrops()
         connectRaidCompletion()
         
-        -- Check if inventory webhook is enabled
+        -- Check if inventory webhook is enabled with continuous updates
         if WebhookConfig.InventorySendEnabled and not WebhookConfig.Connections.InventorySender then
             WebhookConfig.Connections.InventorySender = spawn(function()
                 while WebhookConfig.InventorySendEnabled do
-                    local currentTime = os.time()
+                    -- Sende Inventar zur kontinuierlichen Aktualisierung
+                    Utilities.SendInventoryWebhook()
                     
-                    -- Send inventory when interval has elapsed
-                    if currentTime - WebhookConfig.LastInventorySend >= WebhookConfig.InventoryInterval then
-                        Utilities.SendInventoryWebhook()
-                        WebhookConfig.LastInventorySend = currentTime
-                    end
-                    
-                    wait(1) -- Check every second
+                    -- Kurze Verzögerung, um Discord-Ratelimits zu vermeiden
+                    wait(5) -- Update alle 5 Sekunden
                 end
             end)
         end
