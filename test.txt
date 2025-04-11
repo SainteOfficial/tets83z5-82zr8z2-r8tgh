@@ -3904,28 +3904,26 @@ Utilities.SendInventoryWebhook = function()
             MYTHIC = 0
         }
         
+        local totalItems = 0
         for _, items in pairs(categorizedItems) do
             for _, item in ipairs(items) do
                 if item and item.info and item.info.rarity and item.info.rarity.name and item.data then
                     local rarityName = item.info.rarity.name
+                    local quantity = item.data.quantity or 1
                     if rarityStats[rarityName] then
-                        rarityStats[rarityName] = rarityStats[rarityName] + (item.data.quantity or 1)
+                        rarityStats[rarityName] = rarityStats[rarityName] + quantity
+                        totalItems = totalItems + quantity
                     end
                 end
             end
         end
         
-        -- Create rarity statistics field
+        -- Korrekte Berechnung für Raritäten-Statistik
         local rarityField = {
             name = "📈 **Item Rarity Distribution**",
             value = "",
             inline = false
         }
-        
-        local totalItems = 0
-        for _, count in pairs(rarityStats) do
-            totalItems = totalItems + count
-        end
         
         -- Seltenheiten in absteigender Reihenfolge (Mythisch zuerst)
         local rarityOrder = {"MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON"}
@@ -3935,7 +3933,8 @@ Utilities.SendInventoryWebhook = function()
             if count > 0 then
                 local rarityEmoji = getRarityEmoji(rarityName)
                 local displayName = RARITY_NAMES[rarityName] or rarityName
-                local percentage = math.floor((count / totalItems) * 100)
+                -- Korrekte Prozentberechnung mit Sicherheitsprüfung
+                local percentage = totalItems > 0 and math.floor((count / totalItems) * 100) or 0
                 local barLength = math.max(1, math.floor(percentage / 5))
                 local progressBar = string.rep("█", barLength) .. string.rep("░", 20 - barLength)
                 
@@ -3952,44 +3951,51 @@ Utilities.SendInventoryWebhook = function()
         
         table.insert(statsEmbed.fields, rarityField)
         
-        -- Füge zusätzliche Statistiken hinzu
-        local categoryStatsField = {
-            name = "🗃️ **Category Distribution**",
-            value = "",
-            inline = false
-        }
-        
-        local categoryCount = {}
+        -- Detaillierte Auflistung der Items nach Kategorie
         for categoryName, items in pairs(categorizedItems) do
-            local itemCount = 0
-            for _, item in ipairs(items) do
-                itemCount = itemCount + (item.data.quantity or 1)
-            end
-            categoryCount[categoryName] = itemCount
-        end
-        
-        -- Kategorien nach Anzahl sortieren
-        local sortedCategories = {}
-        for categoryName, count in pairs(categoryCount) do
-            table.insert(sortedCategories, {name = categoryName, count = count})
-        end
-        
-        table.sort(sortedCategories, function(a, b) return a.count > b.count end)
-        
-        for _, category in ipairs(sortedCategories) do
-            local emoji = getCategoryEmoji(category.name)
-            local percentage = math.floor((category.count / totalItems) * 100)
+            local emoji = getCategoryEmoji(categoryName)
+            local categoryField = {
+                name = emoji .. " **" .. categoryName .. " Items**",
+                value = "",
+                inline = false
+            }
             
-            categoryStatsField.value = categoryStatsField.value .. string.format(
-                "%s **%s:** %d (%d%%)\n",
-                emoji,
-                category.name,
-                category.count,
-                percentage
-            )
+            -- Sortiere Items nach Name
+            local sortedItems = {}
+            for _, item in ipairs(items) do
+                if item and item.info and item.data then
+                    table.insert(sortedItems, item)
+                end
+            end
+            
+            table.sort(sortedItems, function(a, b)
+                return (a.info.name or "") < (b.info.name or "")
+            end)
+            
+            -- Erstelle eine detaillierte Auflistung der Items
+            for _, item in ipairs(sortedItems) do
+                if item and item.info and item.data then
+                    local rarityEmoji = item.info.rarity and getRarityEmoji(item.info.rarity.name) or "❓"
+                    local equipped = (item.data.equipped and "✅") or ""
+                    
+                    categoryField.value = categoryField.value .. string.format(
+                        "%s **%s** (×%d) %s\n",
+                        rarityEmoji,
+                        item.info.name or "Unknown Item",
+                        item.data.quantity or 0,
+                        equipped
+                    )
+                end
+            end
+            
+            -- Füge das Feld nur hinzu, wenn es Items enthält
+            if categoryField.value ~= "" then
+                table.insert(statsEmbed.fields, categoryField)
+            end
         end
         
-        table.insert(statsEmbed.fields, categoryStatsField)
+        -- Entferne den alten Category Distribution Bereich, da wir jetzt detaillierte Auflistungen haben
+        
         table.insert(embeds, statsEmbed)
         
         -- Versende Webhook mit verbessertem Design
