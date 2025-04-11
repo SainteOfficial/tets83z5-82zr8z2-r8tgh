@@ -2876,13 +2876,14 @@ TabMisc:CreateSection("Webhook Benachrichtigungen")
 local WebhookConfig = {
     Enabled = false,
     URL = "",
-    NotifyRareDrops = true,
-    NotifyBossFights = true,
-    NotifyTowerCompletion = true,
-    NotifyRaidCompletion = true,
-    MinimumRarity = "legendary", -- common, rare, epic, legendary, mythic
-    Connections = {}
+    InventorySendEnabled = false,
+    InventoryInterval = 300, -- 5 Minuten Standardwert
+    LastInventorySend = 0,
+    LastMessageID = nil
 }
+
+-- Inventar Webhook Abschnitt
+TabMisc:CreateSection("Inventory Webhook")
 
 -- Webhook URL Input
 local webhook_url_input = TabMisc:CreateInput({
@@ -2899,547 +2900,24 @@ local webhook_url_input = TabMisc:CreateInput({
     end
 }, "WebhookURL")
 
--- Webhook Toggle
-local webhook_toggle = TabMisc:CreateToggle({
-    Name = "Webhook Benachrichtigungen aktivieren",
-    Description = "Aktiviert Benachrichtigungen über den konfigurierten Webhook",
-    CurrentValue = false,
+-- Webhook Update Interval Input
+TabMisc:CreateInput({
+    Name = "Webhook Update Interval",
+    Description = "Set the interval (in minutes) between inventory webhook updates",
+    PlaceholderText = "5",
+    CurrentValue = "5",
+    Numeric = true,
+    MaxCharacters = 4,
     Callback = function(Value)
-        WebhookConfig.Enabled = Value
-        
-        if Value then
-            if WebhookConfig.URL == "" then
-                Utilities.Notify("Webhook", "Bitte zuerst eine Webhook URL eingeben", "error")
-                return false
-            end
-            
-            -- Test Webhook
-            Utilities.SendWebhook({
-                username = "MythHub",
-                embeds = {{
-                    title = "Webhook Test",
-                    description = "Die Webhook-Verbindung wurde erfolgreich hergestellt!",
-                    color = 5814783, -- Blau in Dezimal
-                    fields = {{
-                        name = "Spieler",
-                        value = Utilities.GetLocalPlayer().Name,
-                        inline = true
-                    }, {
-                        name = "Server ID",
-                        value = game.JobId,
-                        inline = true
-                    }},
-                    footer = {
-                        text = "MythHub Premium - Anime Card Clash"
-                    },
-                    timestamp = DateTime.now():ToIsoDate()
-                }}
-            })
-            
-            Utilities.Notify("Webhook", "Webhook Benachrichtigungen aktiviert", "webhook")
+        local interval = tonumber(Value)
+        if interval and interval > 0 then
+            WebhookConfig.InventoryInterval = interval * 60 -- Konvertiere zu Sekunden
+            Utilities.Notify("Webhook", "Update interval set to " .. interval .. " minutes", "webhook")
         else
-            Utilities.Notify("Webhook", "Webhook Benachrichtigungen deaktiviert", "webhook")
+            Utilities.Notify("Error", "Please enter a valid number greater than 0", "error")
         end
     end
-}, "WebhookToggle")
-
--- Benachrichtigungsoptionen
-TabMisc:CreateToggle({
-    Name = "Bei seltenen Drops benachrichtigen",
-    Description = "Sendet eine Benachrichtigung, wenn ein seltenes Item gedroppt wird",
-    CurrentValue = true,
-    Callback = function(Value)
-        WebhookConfig.NotifyRareDrops = Value
-    end
-}, "WebhookRareDrops")
-
-TabMisc:CreateToggle({
-    Name = "Bei Boss-Kämpfen benachrichtigen",
-    Description = "Sendet eine Benachrichtigung, wenn ein Boss-Kampf beginnt",
-    CurrentValue = true,
-    Callback = function(Value)
-        WebhookConfig.NotifyBossFights = Value
-    end
-}, "WebhookBossFights")
-
-TabMisc:CreateToggle({
-    Name = "Bei Tower-Abschluss benachrichtigen",
-    Description = "Sendet eine Benachrichtigung, wenn ein Tower abgeschlossen wurde",
-    CurrentValue = true,
-    Callback = function(Value)
-        WebhookConfig.NotifyTowerCompletion = Value
-    end
-}, "WebhookTowerCompletion")
-
-TabMisc:CreateToggle({
-    Name = "Bei Raid-Abschluss benachrichtigen",
-    Description = "Sendet eine Benachrichtigung, wenn ein Raid abgeschlossen wurde",
-    CurrentValue = true,
-    Callback = function(Value)
-        WebhookConfig.NotifyRaidCompletion = Value
-    end
-}, "WebhookRaidCompletion")
-
--- Rarity Dropdown
-local rarity_dropdown = TabMisc:CreateDropdown({
-    Name = "Minimale Drop-Seltenheit",
-    Description = "Bei welcher Seltenheit soll benachrichtigt werden",
-    Options = {"common", "rare", "epic", "legendary", "mythic"},
-    CurrentOption = {"legendary"},
-    MultipleOptions = false,
-    SpecialType = nil,
-    Callback = function(Option)
-        WebhookConfig.MinimumRarity = Option[1]
-    end
-}, "WebhookRarity")
-
--- Funktion zum Senden von Webhook-Benachrichtigungen
-Utilities.SendWebhook = function(data)
-    if not WebhookConfig.Enabled or WebhookConfig.URL == "" then
-        return
-    end
-    
-    local success, result = pcall(function()
-        local HttpService = game:GetService("HttpService")
-        local jsonData = HttpService:JSONEncode(data)
-        
-        -- HTTP-Anfrage über Executor senden
-        local httpRequest = (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or request
-        
-        if httpRequest then
-            httpRequest({
-                Url = WebhookConfig.URL,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = jsonData
-            })
-            return true
-        else
-            return false
-        end
-    end)
-    
-    if not success or not result then
-        warn("Webhook-Anfrage fehlgeschlagen: " .. tostring(result))
-    end
-end
-
--- Boss-Kampf erkennung für Webhook
-spawn(function()
-    while wait(1) do
-        if WebhookConfig.Enabled and WebhookConfig.NotifyBossFights then
-            if Utilities.IsInBattle() then
-                -- Prüfe, ob wir gegen einen Boss kämpfen
-                local localPlayer = Utilities.GetLocalPlayer()
-                if localPlayer and localPlayer.PlayerGui then
-                    local battleGui = localPlayer.PlayerGui:FindFirstChild("battle")
-                    if battleGui then
-                        -- Versuche, den Namen des Gegners zu ermitteln
-                        local enemyName = "Unbekannter Boss"
-                        pcall(function()
-                            -- Der genaue Pfad zum Namen des Gegners kann variieren
-                            -- Je nach UI-Struktur im Spiel
-                            local nameLabel = battleGui:FindFirstChild("EnemyName", true)
-                            if nameLabel and nameLabel:IsA("TextLabel") then
-                                enemyName = nameLabel.Text
-                            end
-                        end)
-                        
-                        -- Prüfe, ob es sich um einen Boss handelt
-                        local isBoss = false
-                        for _, bossName in pairs(AutoFarmConfig.WorldBosses) do
-                            if string.find(enemyName:lower(), bossName:lower()) then
-                                isBoss = true
-                                break
-                            end
-                        end
-                        
-                        if isBoss then
-                            -- Sende Webhook-Benachrichtigung für Boss-Kampf
-                            Utilities.SendWebhook({
-                                username = "MythHub",
-                                embeds = {{
-                                    title = "Boss-Kampf Begonnen",
-                                    description = "Ein Boss-Kampf hat begonnen!",
-                                    color = 15158332, -- Rot in Dezimal
-                                    fields = {{
-                                        name = "Boss",
-                                        value = enemyName,
-                                        inline = true
-                                    }, {
-                                        name = "Spieler",
-                                        value = localPlayer.Name,
-                                        inline = true
-                                    }},
-                                    footer = {
-                                        text = "MythHub Premium - Anime Card Clash"
-                                    },
-                                    timestamp = DateTime.now():ToIsoDate()
-                                }}
-                            })
-                            
-                            -- Warte eine Weile, um wiederholte Benachrichtigungen zu vermeiden
-                            wait(30)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- Item Drop Erkennung für Webhook
-local function connectItemDrops()
-    if WebhookConfig.Connections.ItemDrops then
-        WebhookConfig.Connections.ItemDrops:Disconnect()
-    end
-    
-    WebhookConfig.Connections.ItemDrops = workspace.ChildAdded:Connect(function(child)
-        if WebhookConfig.Enabled and WebhookConfig.NotifyRareDrops then
-            -- Warte kurz, bis das Objekt vollständig geladen ist
-            wait(0.5)
-            
-            -- Prüfe, ob es sich um ein gedroptes Item handelt
-            if child:IsA("Model") and child:FindFirstChild("Rarity") then
-                local rarity = child.Rarity.Value
-                local itemName = child.Name
-                
-                -- Prüfe Rarity gegen Mindestrarity
-                local rarityValues = {
-                    common = 1,
-                    rare = 2,
-                    epic = 3,
-                    legendary = 4,
-                    mythic = 5
-                }
-                
-                local minRarityValue = rarityValues[WebhookConfig.MinimumRarity] or 4
-                local itemRarityValue = rarityValues[rarity:lower()] or 1
-                
-                if itemRarityValue >= minRarityValue then
-                    -- Sende Webhook-Benachrichtigung für seltenen Drop
-                    Utilities.SendWebhook({
-                        username = "MythHub",
-                        embeds = {{
-                            title = "Seltenes Item gefunden!",
-                            description = "Ein seltenes Item wurde gedroppt!",
-                            color = 8311585, -- Lila in Dezimal
-                            fields = {{
-                                name = "Item",
-                                value = itemName,
-                                inline = true
-                            }, {
-                                name = "Seltenheit",
-                                value = rarity,
-                                inline = true
-                            }, {
-                                name = "Spieler",
-                                value = Utilities.GetLocalPlayer().Name,
-                                inline = true
-                            }},
-                            footer = {
-                                text = "MythHub Premium - Anime Card Clash"
-                            },
-                            timestamp = DateTime.now():ToIsoDate()
-                        }}
-                    })
-                end
-            end
-        end
-    end)
-end
-
--- Tower Completion Erkennung für Webhook
-local function checkTowerCompletion()
-    if WebhookConfig.Enabled and WebhookConfig.NotifyTowerCompletion then
-        -- Prüfe Battle Tower
-        local battleTowerLevel = Utilities.GetBattleTowerLevel()
-        local infiniteTowerFloor = Utilities.GetInfiniteTowerFloor()
-        
-        -- Speichern der aktuellen Level/Floors
-        if not WebhookConfig.LastBattleTowerLevel then
-            WebhookConfig.LastBattleTowerLevel = battleTowerLevel
-        end
-        
-        if not WebhookConfig.LastInfiniteTowerFloor then
-            WebhookConfig.LastInfiniteTowerFloor = infiniteTowerFloor
-        end
-        
-        -- Überprüfen auf Änderungen
-        if battleTowerLevel > WebhookConfig.LastBattleTowerLevel then
-            -- Battle Tower Level abgeschlossen
-            Utilities.SendWebhook({
-                username = "MythHub",
-                embeds = {{
-                    title = "Battle Tower abgeschlossen!",
-                    description = "Ein Battle Tower Level wurde abgeschlossen!",
-                    color = 4037965, -- Grün in Dezimal
-                    fields = {{
-                        name = "Level",
-                        value = tostring(WebhookConfig.LastBattleTowerLevel),
-                        inline = true
-                    }, {
-                        name = "Neues Level",
-                        value = tostring(battleTowerLevel),
-                        inline = true
-                    }, {
-                        name = "Spieler",
-                        value = Utilities.GetLocalPlayer().Name,
-                        inline = true
-                    }},
-                    footer = {
-                        text = "MythHub Premium - Anime Card Clash"
-                    },
-                    timestamp = DateTime.now():ToIsoDate()
-                }}
-            })
-            
-            WebhookConfig.LastBattleTowerLevel = battleTowerLevel
-        end
-        
-        if infiniteTowerFloor > WebhookConfig.LastInfiniteTowerFloor then
-            -- Infinite Tower Floor abgeschlossen
-            Utilities.SendWebhook({
-                username = "MythHub",
-                embeds = {{
-                    title = "Infinite Tower abgeschlossen!",
-                    description = "Ein Infinite Tower Floor wurde abgeschlossen!",
-                    color = 4037965, -- Grün in Dezimal
-                    fields = {{
-                        name = "Floor",
-                        value = tostring(WebhookConfig.LastInfiniteTowerFloor),
-                        inline = true
-                    }, {
-                        name = "Neuer Floor",
-                        value = tostring(infiniteTowerFloor),
-                        inline = true
-                    }, {
-                        name = "Spieler",
-                        value = Utilities.GetLocalPlayer().Name,
-                        inline = true
-                    }},
-                    footer = {
-                        text = "MythHub Premium - Anime Card Clash"
-                    },
-                    timestamp = DateTime.now():ToIsoDate()
-                }}
-            })
-            
-            WebhookConfig.LastInfiniteTowerFloor = infiniteTowerFloor
-        end
-    end
-end
-
--- Tower Completion Checker starten
-spawn(function()
-    while wait(30) do -- Alle 30 Sekunden prüfen
-        pcall(checkTowerCompletion)
-    end
-end)
-
--- Raid Completion Erkennung
-local function connectRaidCompletion()
-    if WebhookConfig.Connections.RaidCompletion then
-        WebhookConfig.Connections.RaidCompletion:Disconnect()
-    end
-    
-    WebhookConfig.Connections.RaidCompletion = game:GetService("Players").LocalPlayer.PlayerGui.ChildAdded:Connect(function(child)
-        if WebhookConfig.Enabled and WebhookConfig.NotifyRaidCompletion then
-            if child.Name == "battle-end" then
-                wait(1) -- Kurz warten, bis GUI vollständig geladen ist
-                
-                -- Versuche zu ermitteln, ob es ein Raid war
-                local wasRaid = false
-                local raidBoss = "Unbekannt"
-                
-                pcall(function()
-                    -- Überprüfe Battle-End GUI auf Hinweise auf einen Raid
-                    if child:FindFirstChild("RaidRewards", true) or 
-                       child:FindFirstChild("DragonRewards", true) then
-                        wasRaid = true
-                        
-                        -- Versuche, den Raid-Boss-Namen zu ermitteln
-                        local bossNameLabel = child:FindFirstChild("BossName", true)
-                        if bossNameLabel and bossNameLabel:IsA("TextLabel") then
-                            raidBoss = bossNameLabel.Text
-                        end
-                    end
-                end)
-                
-                if wasRaid then
-                    -- Sende Webhook-Benachrichtigung für abgeschlossenen Raid
-                    Utilities.SendWebhook({
-                        username = "MythHub",
-                        embeds = {{
-                            title = "Raid abgeschlossen!",
-                            description = "Ein Raid wurde erfolgreich abgeschlossen!",
-                            color = 16766720, -- Gold in Dezimal
-                            fields = {{
-                                name = "Boss",
-                                value = raidBoss,
-                                inline = true
-                            }, {
-                                name = "Spieler",
-                                value = Utilities.GetLocalPlayer().Name,
-                                inline = true
-                            }},
-                            footer = {
-                                text = "MythHub Premium - Anime Card Clash"
-                            },
-                            timestamp = DateTime.now():ToIsoDate()
-                        }}
-                    })
-                end
-            end
-        end
-    end)
-end
-
--- Item Drop und Raid Completion Verbindungen initialisieren
-if WebhookConfig.Enabled then
-    connectItemDrops()
-    connectRaidCompletion()
-end
-
--- Webhook Verbindungen aktualisieren, wenn der Schalter umgelegt wird
-WebhookConfig.UpdateConnections = function()
-    if WebhookConfig.Enabled then
-        connectItemDrops()
-        connectRaidCompletion()
-        
-        -- Check if inventory webhook is enabled with continuous updates
-        if WebhookConfig.InventorySendEnabled and not WebhookConfig.Connections.InventorySender then
-            WebhookConfig.Connections.InventorySender = spawn(function()
-                while WebhookConfig.InventorySendEnabled do
-                    -- Sende/aktualisiere das Inventar 
-                    Utilities.SendInventoryWebhook()
-                    
-                    -- Kurze Verzögerung, um Discord-Ratelimits zu vermeiden
-                    wait(5) -- Update alle 5 Sekunden
-                end
-            end)
-            
-            -- Debug-Info
-            warn("Inventory Webhook mit kontinuierlichen Updates aktiviert!")
-        end
-    else
-        -- Verbindungen trennen, wenn deaktiviert
-        if WebhookConfig.Connections.ItemDrops then
-            WebhookConfig.Connections.ItemDrops:Disconnect()
-            WebhookConfig.Connections.ItemDrops = nil
-        end
-        
-        if WebhookConfig.Connections.RaidCompletion then
-            WebhookConfig.Connections.RaidCompletion:Disconnect()
-            WebhookConfig.Connections.RaidCompletion = nil
-        end
-        
-        if WebhookConfig.Connections.InventorySender then
-            WebhookConfig.Connections.InventorySender:Disconnect()
-            WebhookConfig.Connections.InventorySender = nil
-        end
-    end
-end
-
--- Webhook-Status bei Toggle aktualisieren
-webhook_toggle:Set({Callback = function(Value)
-    WebhookConfig.Enabled = Value
-    
-    if Value then
-        if WebhookConfig.URL == "" then
-            Utilities.Notify("Webhook", "Bitte zuerst eine Webhook URL eingeben", "error")
-            return false
-        end
-        
-        -- Test Webhook
-        Utilities.SendWebhook({
-            username = "MythHub",
-            embeds = {{
-                title = "Webhook Test",
-                description = "Die Webhook-Verbindung wurde erfolgreich hergestellt!",
-                color = 5814783, -- Blau in Dezimal
-                fields = {{
-                    name = "Spieler",
-                    value = Utilities.GetLocalPlayer().Name,
-                    inline = true
-                }, {
-                    name = "Server ID",
-                    value = game.JobId,
-                    inline = true
-                }},
-                footer = {
-                    text = "MythHub Premium - Anime Card Clash"
-                },
-                timestamp = DateTime.now():ToIsoDate()
-            }}
-        })
-        
-        WebhookConfig.UpdateConnections()
-        Utilities.Notify("Webhook", "Webhook Benachrichtigungen aktiviert", "webhook")
-    else
-        WebhookConfig.UpdateConnections()
-        Utilities.Notify("Webhook", "Webhook Benachrichtigungen deaktiviert", "webhook")
-    end
-end})
-
--- Aktualisiere das Änderungsprotokoll
-if WebhookConfig then
-    local changelogText = [[
-    ÄNDERUNGSPROTOKOLL - MAI 2025
-    
-    - Remote-Pfade von "3aA" auf "kQR" aktualisiert
-    - Remote-IDs für alle Funktionen aktualisiert:
-      * SummonEnemy: 8a63919a-217b-436a-9cfa-4b472d213bbb
-      * Battle Tower: 1457e535-9d02-4014-9883-7618f41bed84
-      * Infinite Tower (Start): 60ed7d69-2cac-467c-9695-6ab3e77159b9
-      * Infinite Tower (Ende): 23fb560d-73d0-404a-8dda-bf8088b08f0a
-      * Infinite Tower (Pause): 5bdb0ab8-610f-4823-9e57-4cd48a5c4eb8
-      * Exploration (Deploy): 4971f60f-90ff-4142-bf88-5395122136c2
-      * Exploration (Claim): e82eeec1-ca38-4f7b-bf14-4b85df674c7b
-      * Shop: 41ccb1a6-1009-4e2f-924e-1b71f8020e9b
-      * Stats Upgrade: a0d1432a-262d-4b0a-9173-ee8b1dcfb69c
-    - Auto-Farm, Raid und Infinite Tower Funktionen angepasst
-    - Unterstützung für neue Enemy IDs und Endpoints hinzugefügt
-    - Auto-Execute nach Teleport hinzugefügt
-    - Auto-Reconnect mit Konfigurationsspeicherung hinzugefügt
-    - Discord Webhook-Integration hinzugefügt
-    - Inventar-Webhook mit Live-Updates implementiert
-    ]]
-    
-    -- Aktualisiere das Änderungsprotokoll am Ende des Skripts
-    local lines = {}
-    for line in changelogText:gmatch("[^\r\n]+") do
-        table.insert(lines, line)
-    end
-    
-    -- Ersetze das bestehende Änderungsprotokoll
-    local script = debug.getinfo(1, "S").source:sub(2)
-    local content = readfile(script)
-    local startPattern = "%-%-%[%[%s*ÄNDERUNGSPROTOKOLL"
-    local endPattern = "%]%]"
-    
-    local startPos = content:find(startPattern)
-    local endPos = content:find(endPattern, startPos)
-    
-    if startPos and endPos then
-        local preContent = content:sub(1, startPos - 1)
-        local postContent = content:sub(endPos + 2)
-        local newContent = preContent .. "--[[\n" .. changelogText .. "\n]]" .. postContent
-        
-        writefile(script, newContent)
-    end
-end
-
--- Ergänze WebhookConfig um Inventar-Funktionalität
-WebhookConfig.InventorySendEnabled = false
-WebhookConfig.InventoryInterval = 300 -- 5 Minuten Standardwert
-WebhookConfig.LastInventorySend = 0
-
--- Inventar Webhook Abschnitt
-TabMisc:CreateDivider()
-TabMisc:CreateSection("Inventory Webhook")
+}, "WebhookIntervalInput")
 
 -- Inventar Webhook Toggle
 TabMisc:CreateToggle({
@@ -3455,19 +2933,11 @@ TabMisc:CreateToggle({
                 return false
             end
             
-            -- Aktiviere Live-Aktualisierungen
-            WebhookConfig.UpdateConnections()
-            
             -- Sofort senden, wenn aktiviert
             Utilities.SendInventoryWebhook()
             
             Utilities.Notify("Webhook", "Inventory webhook enabled with live updates", "webhook")
         else
-            if WebhookConfig.Connections.InventorySender then
-                WebhookConfig.Connections.InventorySender:Disconnect()
-                WebhookConfig.Connections.InventorySender = nil
-            end
-            
             Utilities.Notify("Webhook", "Inventory webhook disabled", "webhook")
         end
     end
@@ -3488,31 +2958,58 @@ TabMisc:CreateButton({
     end
 })
 
--- Funktion zum Aufbereiten und Senden des Inventars über Webhook
-Utilities.SendInventoryWebhook = function()
-    if not WebhookConfig.Enabled or WebhookConfig.URL == "" then
+-- Funktion zum Senden von Webhook-Nachrichten
+Utilities.SendWebhook = function(data)
+    if not WebhookConfig.URL == "" then
         return
     end
     
     local success, result = pcall(function()
-        -- Notwendige Module importieren
+        local HttpService = game:GetService("HttpService")
+        local jsonData = HttpService:JSONEncode(data)
+        
+        local httpRequest = (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or request
+        
+        if httpRequest then
+            httpRequest({
+                Url = WebhookConfig.URL,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = jsonData
+            })
+            return true
+        else
+            return false
+        end
+    end)
+    
+    if not success then
+        warn("Webhook-Anfrage fehlgeschlagen: " .. tostring(result))
+    end
+end
+
+-- Funktion zum Aufbereiten und Senden des Inventars über Webhook
+Utilities.SendInventoryWebhook = function()
+    if WebhookConfig.URL == "" then
+        return
+    end
+    
+    local success, result = pcall(function()
         local ReplicatedStorage = game:GetService("ReplicatedStorage")
         local RuntimeLib = require(ReplicatedStorage:WaitForChild("rbxts_include"):WaitForChild("RuntimeLib"))
         
-        -- Check if modules exist before importing
         if not ReplicatedStorage or not RuntimeLib then
             warn("Required modules not found for inventory webhook")
             return false
         end
         
-        -- Safe import with error handling
-        local LocalUser, ItemsWithId, ItemCategory, Rarity
+        local LocalUser, ItemsWithId
         
         local importSuccess, importError = pcall(function()
             LocalUser = RuntimeLib.import(script, ReplicatedStorage, "TS", "user", "local", "local-user").LocalUser
             ItemsWithId = RuntimeLib.import(script, ReplicatedStorage, "TS", "item", "items").ItemsWithId
-            ItemCategory = RuntimeLib.import(script, ReplicatedStorage, "TS", "item", "item-category").ItemCategory
-            Rarity = RuntimeLib.import(script, ReplicatedStorage, "TS", "rarity").Rarity
         end)
         
         if not importSuccess then
@@ -3520,13 +3017,12 @@ Utilities.SendInventoryWebhook = function()
             return false
         end
         
-        -- Validate imported modules
         if not LocalUser or not LocalUser.atomMap or not LocalUser.atomMap.player or not ItemsWithId then
             warn("Required game modules missing or invalid")
             return false
         end
         
-        -- Category emojis
+        -- Category emojis für Items
         local CATEGORY_EMOJIS = {
             POTION = "🧪",
             TRAIT = "⚛️",
@@ -3536,94 +3032,8 @@ Utilities.SendInventoryWebhook = function()
             INSTANT_ROLL = "🎲",
             CARD_BACK = "🎴",
             RAID = "🏯",
-            MISC = "📦",
-            -- Zusätzliche Varianten für verschiedene Schreibweisen
-            ["Potion"] = "🧪",
-            ["Trait"] = "⚛️",
-            ["Title"] = "👑",
-            ["Equipment"] = "🗡️",
-            ["Artifact"] = "🔮",
-            ["Instant Roll"] = "🎲",
-            ["Card Back"] = "🎴",
-            ["Raid"] = "🏯",
-            ["Misc"] = "📦"
+            MISC = "📦"
         }
-        
-        -- Rarity emojis
-        local RARITY_EMOJIS = {
-            COMMON = "⚪",
-            UNCOMMON = "🟢",
-            RARE = "🔷",
-            EPIC = "🟣",
-            LEGENDARY = "🟡",
-            MYTHIC = "🔴"
-        }
-        
-        -- Definiere RARITY_NAMES für eine bessere Anzeige
-        local RARITY_NAMES = {
-            COMMON = "Gewöhnlich",
-            UNCOMMON = "Ungewöhnlich",
-            RARE = "Selten",
-            EPIC = "Episch",
-            LEGENDARY = "Legendär",
-            MYTHIC = "Mythisch"
-        }
-        
-        -- Definiere Kategoriefarben für Embeds
-        local categoryColors = {
-            POTION = 0x3498DB,    -- Blau
-            TRAIT = 0x1ABC9C,     -- Türkis
-            TITLE = 0xF1C40F,     -- Gold
-            EQUIPMENT = 0xE74C3C, -- Rot
-            ARTIFACT = 0x9B59B6,  -- Lila
-            INSTANT_ROLL = 0x2ECC71, -- Grün
-            CARD_BACK = 0xE67E22, -- Orange
-            RAID = 0x34495E,      -- Dunkelblau
-            MISC = 0x95A5A6       -- Grau
-        }
-        
-        -- Returns the matching emoji for a category
-        local function getCategoryEmoji(categoryName)
-            -- Direkte Zuordnung mit einfachen String-Checks
-            local categoryLower = string.lower(tostring(categoryName or ""))
-            
-            if string.find(categoryLower, "potion") then
-                return "🧪"
-            elseif string.find(categoryLower, "trait") then
-                return "⚛️"
-            elseif string.find(categoryLower, "title") then
-                return "👑"
-            elseif string.find(categoryLower, "equipment") then
-                return "🗡️"
-            elseif string.find(categoryLower, "artifact") then
-                return "🔮"
-            elseif string.find(categoryLower, "instant") or string.find(categoryLower, "roll") then
-                return "🎲"
-            elseif string.find(categoryLower, "card") then
-                return "🎴"
-            elseif string.find(categoryLower, "raid") then
-                return "🏯"
-            elseif string.find(categoryLower, "misc") then
-                return "📦"
-            end
-            
-            return "❓" -- Fallback
-        end
-        
-        -- Returns the matching emoji for a rarity
-        local function getRarityEmoji(rarityName)
-            if not rarityName then return "❓" end
-            return RARITY_EMOJIS[rarityName] or "❓"
-        end
-        
-        -- Hilfsfunktionen für schönere Formatierung
-        local function divider(emoji)
-            return string.rep(emoji or "━", 15)
-        end
-        
-        local function formatHeader(text, emoji)
-            return emoji .. " " .. text .. " " .. emoji
-        end
         
         -- Safely get backpack items from the atom map
         local backpackItems = {}
@@ -3666,7 +3076,7 @@ Utilities.SendInventoryWebhook = function()
             end
         end
         
-        -- Get current timestamp and player name with spoiler tags
+        -- Get current timestamp and player name
         local currentTime = os.time()
         local formattedTime = os.date("%Y-%m-%d %H:%M:%S", currentTime)
         
@@ -3685,33 +3095,26 @@ Utilities.SendInventoryWebhook = function()
             warn("Failed to get player name: " .. tostring(getPlayerError))
         end
         
-        local maskedUsername = "||<" .. playerName .. ">||"
-        
-        -- Versuche, das lokale Logo zu laden - vereinfacht und direkt verwenden
-        local logoUrl = "attachment://MYTHLOGO.png" -- Discord Attachment Format
-        
-        -- Prepare output for Discord
+        -- Prepare embeds for Discord
         local embeds = {}
+        
+        -- Main embed with overview
         local mainEmbed = {
-            title = formatHeader("INVENTORY OVERVIEW", "✨"),
-            description = "Player: " .. maskedUsername .. "\n" ..
+            title = "📋 INVENTORY OVERVIEW",
+            description = "Player: " .. playerName .. "\n" ..
                       "Total Items: **" .. itemCount .. "**\n\n" ..
                       "Last Updated: <t:" .. currentTime .. ":R>",
-            color = 0x0000FF, -- Blaues Design wie im Logo
-            thumbnail = {
-                url = logoUrl
-            },
+            color = 0x0000FF,
             fields = {},
             footer = {
                 text = "MythHub Premium • github.com/MythHubRoblox/MythHub",
-                icon_url = logoUrl
             },
             timestamp = DateTime.now():ToIsoDate()
         }
         
-        -- Add equipped items with error handling
+        -- Add equipped items
         local equippedField = {
-            name = "🎽 **Equipped Items**",
+            name = "🎽 Equipped Items",
             value = "",
             inline = false
         }
@@ -3730,17 +3133,16 @@ Utilities.SendInventoryWebhook = function()
             warn("Failed to get equipped items: " .. tostring(getEquippedError))
             equippedField.value = "*Error retrieving equipped items*"
         else
-            -- Verbesserte Null-Prüfungen für Ausrüstungsgegenstände
             if equippedTitle and type(equippedTitle) == "table" and equippedTitle.item and type(equippedTitle.item) == "table" and equippedTitle.item.name then
-                equippedField.value = equippedField.value .. "👑 **Title:** " .. equippedTitle.item.name .. "\n"
+                equippedField.value = equippedField.value .. "👑 Title: " .. equippedTitle.item.name .. "\n"
             end
             
             if equippedEquipment and type(equippedEquipment) == "table" and equippedEquipment.item and type(equippedEquipment.item) == "table" and equippedEquipment.item.name then
-                equippedField.value = equippedField.value .. "⚔️ **Equipment:** " .. equippedEquipment.item.name .. "\n"
+                equippedField.value = equippedField.value .. "⚔️ Equipment: " .. equippedEquipment.item.name .. "\n"
             end
             
             if equippedArtifact and type(equippedArtifact) == "table" and equippedArtifact.item and type(equippedArtifact.item) == "table" and equippedArtifact.item.name then
-                equippedField.value = equippedField.value .. "🔮 **Artifact:** " .. equippedArtifact.item.name .. "\n"
+                equippedField.value = equippedField.value .. "🔮 Artifact: " .. equippedArtifact.item.name .. "\n"
             end
             
             if equippedField.value == "" then
@@ -3751,259 +3153,94 @@ Utilities.SendInventoryWebhook = function()
         table.insert(mainEmbed.fields, equippedField)
         table.insert(embeds, mainEmbed)
         
-        -- Category overview - wir erstellen für jede Kategorie ein eigenes Embed statt alle zusammen
-        -- Entferne das alte categoryOverviewEmbed
-        
-        -- Erstelle für jede Kategorie ein eigenes Embed für bessere Lesbarkeit
+        -- Create category embeds
         for categoryName, items in pairs(categorizedItems) do
             if #items > 0 then
                 local categoryEmbed = {
                     title = categoryName,
-                    description = "**Total:** " .. #items .. " items",
-                    color = categoryColors[categoryName] or 0x2ECC71,
+                    description = "Total: " .. #items .. " items",
+                    color = 0x2ECC71,
                     fields = {},
                     footer = {
-                        text = "MythHub Premium • Category: " .. categoryName,
-                        icon_url = logoUrl
+                        text = "MythHub Premium • Category: " .. categoryName
                     }
                 }
-
-                -- Items nach Seltenheit gruppieren für bessere Übersicht
-                local itemsByRarity = {}
-                for _, item in ipairs(items) do
-                    if item and item.info and item.data then
-                        local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
-                        if not itemsByRarity[rarityName] then
-                            itemsByRarity[rarityName] = {}
-                        end
-                        table.insert(itemsByRarity[rarityName], item)
-                    end
-                end
-
-                -- Seltenheiten in absteigender Reihenfolge (Mythisch zuerst)
-                local rarityOrder = {"MYTHIC", "LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON"}
                 
-                for _, rarityName in ipairs(rarityOrder) do
-                    local rarityItems = itemsByRarity[rarityName]
-                    if rarityItems and #rarityItems > 0 then
-                        local rarityEmoji = getRarityEmoji(rarityName)
-                        local displayName = RARITY_NAMES[rarityName] or rarityName
-                        local fieldValue = ""
-                        
-                        -- Keine Begrenzung, alle Items anzeigen (aufgeteilt in mehrere Felder bei Bedarf)
-                        local maxItemsPerField = 20 -- Maximum pro Discord-Feld
-                        local totalFields = math.ceil(#rarityItems / maxItemsPerField)
-                        
-                        for fieldIndex = 1, totalFields do
-                            local startIdx = (fieldIndex - 1) * maxItemsPerField + 1
-                            local endIdx = math.min(fieldIndex * maxItemsPerField, #rarityItems)
-                            
-                            local fieldValue = ""
-                            for i = startIdx, endIdx do
-                                local item = rarityItems[i]
-                                local equipped = (item.data.equipped and "✅") or ""
-                                
-                                fieldValue = fieldValue .. string.format(
-                                    "%s **%s** (×%d) %s\n",
-                                    categoryEmoji,
-                                    item.info.name or "Unknown Item",
-                                    item.data.quantity or 0,
-                                    equipped
-                                )
-                            end
-                            
-                            local fieldName = categoryName .. " (" .. #rarityItems .. ")"
-                            if totalFields > 1 then
-                                fieldName = fieldName .. " - Part " .. fieldIndex .. "/" .. totalFields
-                            end
-                            
-                            table.insert(categoryEmbed.fields, {
-                                name = fieldName,
-                                value = fieldValue,
-                                inline = false
-                            })
+                -- Group items by name
+                local groupedItems = {}
+                for _, item in ipairs(items) do
+                    if item and item.info and item.info.name and item.data then
+                        local itemName = item.info.name
+                        if not groupedItems[itemName] then
+                            groupedItems[itemName] = {
+                                quantity = 0,
+                                equipped = false
+                            }
+                        end
+                        groupedItems[itemName].quantity = groupedItems[itemName].quantity + (item.data.quantity or 1)
+                        if item.data.equipped then
+                            groupedItems[itemName].equipped = true
                         end
                     end
                 end
-
+                
+                -- Convert to sorted list
+                local sortedItems = {}
+                for itemName, itemData in pairs(groupedItems) do
+                    table.insert(sortedItems, {
+                        name = itemName,
+                        quantity = itemData.quantity,
+                        equipped = itemData.equipped
+                    })
+                end
+                
+                table.sort(sortedItems, function(a, b)
+                    return a.name < b.name
+                end)
+                
+                -- Create fields for items
+                local currentField = {
+                    name = categoryName .. " (" .. #items .. ")",
+                    value = "",
+                    inline = false
+                }
+                
+                local itemCount = 0
+                for _, item in ipairs(sortedItems) do
+                    local emoji = CATEGORY_EMOJIS[categoryName] or "📦"
+                    local equipped = item.equipped and " ✅" or ""
+                    local itemLine = string.format("%s %s (×%d)%s\n", 
+                        emoji,
+                        item.name,
+                        item.quantity,
+                        equipped
+                    )
+                    
+                    -- Check if we need to start a new field (Discord has a 1024 character limit per field)
+                    if #currentField.value + #itemLine > 1024 then
+                        table.insert(categoryEmbed.fields, currentField)
+                        currentField = {
+                            name = categoryName .. " (continued)",
+                            value = "",
+                            inline = false
+                        }
+                    end
+                    
+                    currentField.value = currentField.value .. itemLine
+                end
+                
+                -- Add the last field
+                if currentField.value ~= "" then
+                    table.insert(categoryEmbed.fields, currentField)
+                end
+                
                 if #categoryEmbed.fields > 0 then
                     table.insert(embeds, categoryEmbed)
                 end
             end
         end
         
-        -- Rare items overview (Legendary & Mythic)
-        local rareItemsEmbed = {
-            title = "💎 RARE ITEMS COLLECTION 💎",
-            description = "No legendary or mythic items found in inventory",
-            color = 0xF1C40F, -- Gold
-            fields = {},
-            footer = {
-                text = "MythHub Premium • " .. formattedTime,
-                icon_url = logoUrl
-            }
-        }
-        
-        local foundRareItems = false
-        
-        -- Find all legendary and mythic items
-        for categoryName, items in pairs(categorizedItems) do
-            local rareItems = {}
-            
-            for _, item in ipairs(items) do
-                if item and item.info and item.info.rarity and item.info.rarity.name then
-                    local rarityName = item.info.rarity.name
-                    if rarityName == "LEGENDARY" or rarityName == "MYTHIC" then
-                        table.insert(rareItems, item)
-                        foundRareItems = true
-                    end
-                end
-            end
-            
-            if #rareItems > 0 then
-                local categoryEmoji = getCategoryEmoji(categoryName)
-                local rareItemsField = {
-                    name = categoryEmoji .. " **" .. categoryName .. "**",
-                    value = "",
-                    inline = true
-                }
-                
-                -- Sort by rarity
-                local sortSuccess, sortError = pcall(function()
-                    table.sort(rareItems, function(a, b)
-                        if not a or not b or not a.info or not b.info then return false end
-                        
-                        if (a.info.rarity and b.info.rarity and a.info.rarity.value ~= b.info.rarity.value) then
-                            return (a.info.rarity.value or 0) > (b.info.rarity.value or 0)
-                        end
-                        return (a.info.name or "") < (b.info.name or "")
-                    end)
-                end)
-                
-                if not sortSuccess then
-                    warn("Failed to sort rare items: " .. tostring(sortError))
-                end
-                
-                for _, item in ipairs(rareItems) do
-                    if item and item.info and item.data then
-                        local rarityName = (item.info.rarity and item.info.rarity.name) or "UNKNOWN"
-                        local rarityEmoji = getRarityEmoji(rarityName)
-                        local equipped = (item.data.equipped and "✅") or ""
-                        
-                        rareItemsField.value = rareItemsField.value .. string.format(
-                            "%s **%s** (×%d) %s\n",
-                            rarityEmoji,
-                            item.info.name or "Unknown Item",
-                            item.data.quantity or 0,
-                            equipped
-                        )
-                    end
-                end
-                
-                table.insert(rareItemsEmbed.fields, rareItemsField)
-            end
-        end
-        
-        if not foundRareItems then
-            rareItemsEmbed.description = "*No legendary or mythic items found in inventory*"
-        end
-        
-        table.insert(embeds, rareItemsEmbed)
-        
-        -- Add statistics embed
-        local statsEmbed = {
-            title = formatHeader("INVENTORY STATISTICS", "📊"),
-            color = 0x9B59B6, -- Lila
-            fields = {},
-            footer = {
-                text = "MythHub Premium • discord.gg/mythhub",
-                icon_url = logoUrl
-            }
-        }
-        
-        -- Detaillierte Auflistung der Items direkt nach Kategorie
-        for categoryName, items in pairs(categorizedItems) do
-            if #items == 0 then
-                -- Überspringe leere Kategorien
-                continue
-            end
-            
-            -- Erstelle ein klares, organisiertes Format für die Kategorieüberschrift
-            local categoryEmoji = getCategoryEmoji(categoryName)
-            local categoryField = {
-                name = categoryName .. " (" .. #items .. ")",
-                value = "",
-                inline = false
-            }
-            
-            -- Gruppiere Items nach Namen und Seltenheit
-            local groupedItems = {}
-            
-            for _, item in ipairs(items) do
-                if item and item.info and item.info.name and item.data then
-                    local itemName = item.info.name
-                    local key = itemName -- Gruppierungsschlüssel
-                    
-                    if not groupedItems[key] then
-                        groupedItems[key] = {
-                            name = itemName,
-                            quantity = 0,
-                            equipped = item.data.equipped or false
-                        }
-                    end
-                    
-                    -- Summiere die Menge
-                    groupedItems[key].quantity = groupedItems[key].quantity + (item.data.quantity or 1)
-                    
-                    -- Falls ein Item ausgerüstet ist, markiere es
-                    if item.data.equipped then
-                        groupedItems[key].equipped = true
-                    end
-                end
-            end
-            
-            -- Konvertiere in Liste zum Sortieren
-            local sortedItems = {}
-            for _, itemData in pairs(groupedItems) do
-                table.insert(sortedItems, itemData)
-            end
-            
-            -- Sortiere nur nach Namen, da es keine Raritäten gibt
-            table.sort(sortedItems, function(a, b)
-                return a.name < b.name
-            end)
-            
-            -- Füge jeden Item-Eintrag zum Feld hinzu
-            for _, itemData in ipairs(sortedItems) do
-                local equipped = itemData.equipped and " ✅" or ""
-                
-                -- WICHTIG: Verwende dasselbe Emoji wie für die Kategorie für jedes Item
-                categoryField.value = categoryField.value .. string.format(
-                    "%s **%s** (×%d)%s\n",
-                    categoryEmoji,
-                    itemData.name,
-                    itemData.quantity,
-                    equipped
-                )
-            end
-            
-            -- Füge einen Zeilenumbruch nach jedem Kategorie-Feld hinzu
-            categoryField.value = "\n" .. categoryField.value
-            
-            -- Füge das Feld zum Embed hinzu, wenn es Inhalt hat
-            if categoryField.value ~= "" then
-                table.insert(statsEmbed.fields, categoryField)
-            end
-        end
-        
-        -- Füge das Kategorie-Feld direkt hinzu, wenn es Inhalt hat
-        if categoryField.value ~= "" then
-            table.insert(statsEmbed.fields, categoryField)
-        end
-        
-        table.insert(embeds, statsEmbed)
-        
-        -- Versende Webhook mit verbessertem Design
+        -- Send webhook
         local HttpService = game:GetService("HttpService")
         local httpRequest = (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or request
         
@@ -4013,97 +3250,37 @@ Utilities.SendInventoryWebhook = function()
                 embeds = {table.unpack(embeds, 1, 10)}
             end
             
-            -- Erstelle einen schöneren Webhook-Titel
             local currentDate = os.date("%d.%m.%Y", os.time())
             local webhookContent = "## 📋 MythHub Inventory Report - " .. currentDate .. "\n"
-            webhookContent = webhookContent .. "Player: " .. maskedUsername .. " | Items: " .. itemCount
+            webhookContent = webhookContent .. "Player: " .. playerName .. " | Items: " .. itemCount
             
-            -- Verbesserte Webhook-Nachricht mit Avatar und Benutzername
-            -- Fügt die Datei direkt als Anhang hinzu
-            local fileData
+            -- HTTP Request
+            local method = "POST"
+            local url = WebhookConfig.URL
             
-            -- Verbesserte Fehlerbehandlung für die Logo-Datei
-            local readSuccess, readResult = pcall(function()
-                if isfile and readfile and isfile("MYTHLOGO.png") then
-                    return readfile("MYTHLOGO.png")
-                elseif getsynasset and readfile and isfile("MYTHLOGO.png") then
-                    -- Alternative für Synapse X
-                    return readfile("MYTHLOGO.png") 
-                end
-                return nil
-            end)
-            
-            if readSuccess and readResult then
-                fileData = readResult
-            else
-                warn("Logo-Datei konnte nicht gelesen werden. Verwende alternatives Logo.")
+            if WebhookConfig.LastMessageID then
+                method = "PATCH"
+                url = WebhookConfig.URL .. "/messages/" .. WebhookConfig.LastMessageID
             end
             
-            -- HTTP Request mit Dateianhang (falls verfügbar)
-            local requestSuccess, requestError = pcall(function()
-                -- Webhook-URL und Methode vorbereiten
-                local method = "POST"  -- Standard: Neue Nachricht erstellen
-                local url = WebhookConfig.URL
-                
-                -- Wenn bereits eine Message-ID gespeichert ist, aktualisiere diese statt eine neue zu senden
-                if WebhookConfig.LastMessageID then
-                    method = "PATCH"  -- PATCH zum Aktualisieren einer existierenden Nachricht
-                    url = WebhookConfig.URL .. "/messages/" .. WebhookConfig.LastMessageID
-                end
-                
-                local response
-                
-                if fileData then
-                    response = httpRequest({
-                        Url = url,
-                        Method = method,
-                        Headers = {
-                            ["Content-Type"] = "multipart/form-data; boundary=---------------------------boundary"
-                        },
-                        Body = "---------------------------boundary\r\n" ..
-                              'Content-Disposition: form-data; name="payload_json"\r\n' ..
-                              "Content-Type: application/json\r\n\r\n" ..
-                              HttpService:JSONEncode({
-                                  username = "MythHub Inventory System",
-                                  content = webhookContent,
-                                  embeds = embeds
-                              }) .. "\r\n" ..
-                              "---------------------------boundary\r\n" ..
-                              'Content-Disposition: form-data; name="file"; filename="MYTHLOGO.png"\r\n' ..
-                              "Content-Type: image/png\r\n\r\n" ..
-                              fileData .. "\r\n" ..
-                              "---------------------------boundary--\r\n"
-                    })
-                else
-                    -- Fallback ohne Dateianhang
-                    response = httpRequest({
-                        Url = url,
-                        Method = method,
-                        Headers = {
-                            ["Content-Type"] = "application/json"
-                        },
-                        Body = HttpService:JSONEncode({
-                            username = "MythHub Inventory System",
-                            avatar_url = "https://i.imgur.com/jVJ9q32.png", -- Fallback
-                            content = webhookContent,
-                            embeds = embeds
-                        })
-                    })
-                end
-                
-                -- Speichere Message-ID für künftige Updates
-                if method == "POST" and response and response.Body then
-                    local success, body = pcall(function() return HttpService:JSONDecode(response.Body) end)
-                    if success and body and body.id then
-                        WebhookConfig.LastMessageID = body.id
-                        -- Debug-Info
-                        warn("Neue Webhook-Nachricht ID gespeichert: " .. body.id)
-                    end
-                end
-            end)
+            local response = httpRequest({
+                Url = url,
+                Method = method,
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = HttpService:JSONEncode({
+                    username = "MythHub Inventory System",
+                    content = webhookContent,
+                    embeds = embeds
+                })
+            })
             
-            if not requestSuccess then
-                warn("Webhook request failed: " .. tostring(requestError))
+            if method == "POST" and response and response.Body then
+                local success, body = pcall(function() return HttpService:JSONDecode(response.Body) end)
+                if success and body and body.id then
+                    WebhookConfig.LastMessageID = body.id
+                end
             end
             
             return true
@@ -4117,54 +3294,3 @@ Utilities.SendInventoryWebhook = function()
     end
 end
 
--- Hilfsfunktionen für schönere Formatierung
-local function formatHeader(text, emoji)
-    return emoji .. " " .. text .. " " .. emoji
-end
-
--- Erstelle ein klares, organisiertes Format für die Kategorieüberschrift
-local categoryEmoji = getCategoryEmoji(categoryName)
-local categoryField = {
-    name = categoryName .. " (" .. #items .. ")",
-    value = "",
-    inline = false
-}
-
--- Entferne die Legende
--- Füge stattdessen den Intervall-Input hinzu
-TabMisc:CreateInput({
-    Name = "Webhook Update Interval",
-    Description = "Set the interval (in minutes) between inventory webhook updates",
-    PlaceholderText = "5",
-    CurrentValue = "5",
-    Numeric = true,
-    MaxCharacters = 4,
-    Callback = function(Value)
-        local interval = tonumber(Value)
-        if interval and interval > 0 then
-            WebhookConfig.InventoryInterval = interval * 60 -- Konvertiere zu Sekunden
-            Utilities.Notify("Webhook", "Update interval set to " .. interval .. " minutes", "webhook")
-        else
-            Utilities.Notify("Error", "Please enter a valid number greater than 0", "error")
-        end
-    end
-})
-
--- Webhook Update Interval Input
-TabMisc:CreateInput({
-    Name = "Webhook Update Interval",
-    Description = "Set the interval (in minutes) between inventory webhook updates",
-    PlaceholderText = "5",
-    CurrentValue = "5",
-    Numeric = true,
-    MaxCharacters = 4,
-    Callback = function(Value)
-        local interval = tonumber(Value)
-        if interval and interval > 0 then
-            WebhookConfig.InventoryInterval = interval * 60 -- Konvertiere zu Sekunden
-            Utilities.Notify("Webhook", "Update interval set to " .. interval .. " minutes", "webhook")
-        else
-            Utilities.Notify("Error", "Please enter a valid number greater than 0", "error")
-        end
-    end
-}, "WebhookIntervalInput")
