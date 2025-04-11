@@ -1175,7 +1175,7 @@ local autofarm_all_enemies_inorder_toggle = TabAutoFarm:CreateToggle({
                         if not Utilities.IsBattleEnded() and not Utilities.IsInBattle() then
                             Utilities.MarkEnemyDefeated(currentEnemy)
                             
-                            -- Zum nächsten Gegner wechseln
+                            -- Move to next enemy for next iteration
                             enemyIndex = (enemyIndex % #allEnemiesInOrder) + 1
                         end
                     end
@@ -3628,27 +3628,8 @@ Utilities.SendInventoryWebhook = function()
         
         local maskedUsername = "||<" .. playerName .. ">||"
         
-        -- Versuche, das lokale Logo zu laden
-        local logoPath = "C:\\Users\\saint\\Downloads\\Python Projekte\\AnimeCardClash\\MYTHLOGO.png"
-        local logoUrl = "https://i.imgur.com/jVJ9q32.png" -- Fallback URL
-        
-        -- Versuche, das lokale Logo zu verwenden
-        local useLocalLogo = false
-        pcall(function()
-            if isfile and isfile(logoPath) then
-                -- Wenn wir bestätigen können, dass die Datei existiert
-                useLocalLogo = true
-                -- Hinweis: Discord Webhooks können nur öffentliche URLs für Bilder verwenden,
-                -- also brauchen wir eine Base64-Kodierung oder müssen das Bild irgendwo hochladen
-            end
-        end)
-        
-        -- Wenn wir das lokale Logo gefunden haben, verwenden wir den vollen Pfad
-        if useLocalLogo then
-            -- In einer echten Implementierung würdest du hier einen Dienst nutzen,
-            -- um das Bild hochzuladen und die URL zu verwenden
-            logoUrl = "file://" .. logoPath
-        end
+        -- Versuche, das lokale Logo zu laden - vereinfacht und direkt verwenden
+        local logoUrl = "attachment://MYTHLOGO.png" -- Discord Attachment Format
         
         -- Prepare output for Discord
         local embeds = {}
@@ -3657,7 +3638,7 @@ Utilities.SendInventoryWebhook = function()
             description = "Player: " .. maskedUsername .. "\n" ..
                       "Total Items: **" .. itemCount .. "**\n\n" ..
                       "Last Updated: <t:" .. currentTime .. ":R>",
-            color = 0xFF0000, -- Rot für MythHub Branding
+            color = 0x0000FF, -- Blaues Design wie im Logo
             thumbnail = {
                 url = logoUrl
             },
@@ -3750,29 +3731,38 @@ Utilities.SendInventoryWebhook = function()
                         local displayName = RARITY_NAMES[rarityName] or rarityName
                         local fieldValue = ""
                         
-                        -- Begrenze auf 8 Items pro Seltenheit für bessere Lesbarkeit
-                        local itemsToShow = math.min(8, #rarityItems)
-                        for i = 1, itemsToShow do
-                            local item = rarityItems[i]
-                            local equipped = (item.data.equipped and "✅") or ""
+                        -- Keine Begrenzung, alle Items anzeigen (aufgeteilt in mehrere Felder bei Bedarf)
+                        local maxItemsPerField = 20 -- Maximum pro Discord-Feld
+                        local totalFields = math.ceil(#rarityItems / maxItemsPerField)
+                        
+                        for fieldIndex = 1, totalFields do
+                            local startIdx = (fieldIndex - 1) * maxItemsPerField + 1
+                            local endIdx = math.min(fieldIndex * maxItemsPerField, #rarityItems)
                             
-                            fieldValue = fieldValue .. string.format(
-                                "**%s** (×%d) %s\n",
-                                item.info.name or "Unknown Item",
-                                item.data.quantity or 0,
-                                equipped
-                            )
+                            local fieldValue = ""
+                            for i = startIdx, endIdx do
+                                local item = rarityItems[i]
+                                local equipped = (item.data.equipped and "✅") or ""
+                                
+                                fieldValue = fieldValue .. string.format(
+                                    "**%s** (×%d) %s\n",
+                                    item.info.name or "Unknown Item",
+                                    item.data.quantity or 0,
+                                    equipped
+                                )
+                            end
+                            
+                            local fieldName = rarityEmoji .. " **" .. displayName .. "** (" .. #rarityItems .. ")"
+                            if totalFields > 1 then
+                                fieldName = fieldName .. " - Teil " .. fieldIndex .. "/" .. totalFields
+                            end
+                            
+                            table.insert(categoryEmbed.fields, {
+                                name = fieldName,
+                                value = fieldValue,
+                                inline = false
+                            })
                         end
-                        
-                        if #rarityItems > itemsToShow then
-                            fieldValue = fieldValue .. "*... and " .. (#rarityItems - itemsToShow) .. " more*\n"
-                        end
-                        
-                        table.insert(categoryEmbed.fields, {
-                            name = rarityEmoji .. " **" .. displayName .. "** (" .. #rarityItems .. ")",
-                            value = fieldValue,
-                            inline = false
-                        })
                     end
                 end
                 
@@ -3985,19 +3975,59 @@ Utilities.SendInventoryWebhook = function()
             webhookContent = webhookContent .. "Player: " .. maskedUsername .. " | Items: " .. itemCount
             
             -- Verbesserte Webhook-Nachricht mit Avatar und Benutzername
-            httpRequest({
-                Url = WebhookConfig.URL,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = HttpService:JSONEncode({
-                    username = "MythHub Inventory System",
-                    avatar_url = logoUrl,
-                    content = webhookContent,
-                    embeds = embeds
+            -- Fügt die Datei direkt als Anhang hinzu
+            local fileData
+            
+            -- Versuche, die Logo-Datei zu lesen
+            local readSuccess, readResult = pcall(function()
+                if isfile and readfile and isfile("MYTHLOGO.png") then
+                    return readfile("MYTHLOGO.png")
+                end
+                return nil
+            end)
+            
+            if readSuccess and readResult then
+                fileData = readResult
+            end
+            
+            -- HTTP Request mit Dateianhang (falls verfügbar)
+            if fileData then
+                httpRequest({
+                    Url = WebhookConfig.URL,
+                    Method = "POST",
+                    Headers = {
+                        ["Content-Type"] = "multipart/form-data; boundary=---------------------------boundary"
+                    },
+                    Body = "---------------------------boundary\r\n" ..
+                          'Content-Disposition: form-data; name="payload_json"\r\n' ..
+                          "Content-Type: application/json\r\n\r\n" ..
+                          HttpService:JSONEncode({
+                              username = "MythHub Inventory System",
+                              content = webhookContent,
+                              embeds = embeds
+                          }) .. "\r\n" ..
+                          "---------------------------boundary\r\n" ..
+                          'Content-Disposition: form-data; name="file"; filename="MYTHLOGO.png"\r\n' ..
+                          "Content-Type: image/png\r\n\r\n" ..
+                          fileData .. "\r\n" ..
+                          "---------------------------boundary--\r\n"
                 })
-            })
+            else
+                -- Fallback ohne Dateianhang
+                httpRequest({
+                    Url = WebhookConfig.URL,
+                    Method = "POST",
+                    Headers = {
+                        ["Content-Type"] = "application/json"
+                    },
+                    Body = HttpService:JSONEncode({
+                        username = "MythHub Inventory System",
+                        avatar_url = "https://i.imgur.com/jVJ9q32.png", -- Fallback
+                        content = webhookContent,
+                        embeds = embeds
+                    })
+                })
+            end
             
             return true
         else
