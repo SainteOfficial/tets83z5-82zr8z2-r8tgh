@@ -3566,6 +3566,15 @@ Utilities.SendInventoryWebhook = function()
             return RARITY_EMOJIS[rarityName] or "❓"
         end
         
+        -- Hilfsfunktionen für schönere Formatierung
+        local function divider(emoji)
+            return string.rep(emoji or "━", 15)
+        end
+        
+        local function formatHeader(text, emoji)
+            return divider() .. "\n" .. emoji .. " **" .. text .. "** " .. emoji .. "\n" .. divider()
+        end
+        
         -- Safely get backpack items from the atom map
         local backpackItems = {}
         local getBackpackSuccess, getBackpackError = pcall(function()
@@ -3634,7 +3643,7 @@ Utilities.SendInventoryWebhook = function()
         -- Prepare output for Discord
         local embeds = {}
         local mainEmbed = {
-            title = "🎮 **MYTHHUB INVENTORY TRACKER**",
+            title = formatHeader("INVENTORY OVERVIEW", "✨"),
             description = "Player: " .. maskedUsername .. "\n" ..
                       "Total Items: **" .. itemCount .. "**\n\n" ..
                       "Last Updated: <t:" .. currentTime .. ":R>",
@@ -3699,9 +3708,9 @@ Utilities.SendInventoryWebhook = function()
             if #items > 0 then
                 local emoji = getCategoryEmoji(categoryName)
                 local categoryEmbed = {
-                    title = emoji .. " **" .. categoryName .. " ITEMS**",
+                    title = formatHeader(categoryName, emoji),
                     description = "**Total:** " .. #items .. " items",
-                    color = 0x2ECC71, -- Grün als Standard
+                    color = categoryColors[categoryName] or 0x2ECC71, -- Grün als Standard
                     fields = {},
                     footer = {
                         text = "MythHub Premium • Category: " .. categoryName,
@@ -3774,7 +3783,7 @@ Utilities.SendInventoryWebhook = function()
         
         -- Rare items overview (Legendary & Mythic)
         local rareItemsEmbed = {
-            title = "✨ **RARE ITEMS COLLECTION**",
+            title = formatHeader("RARE ITEMS COLLECTION", "💎"),
             description = "Legendary and mythic items in your inventory",
             color = 0xF1C40F, -- Gold
             fields = {},
@@ -3852,7 +3861,7 @@ Utilities.SendInventoryWebhook = function()
         
         -- Add statistics embed
         local statsEmbed = {
-            title = "📊 **INVENTORY STATISTICS**",
+            title = formatHeader("INVENTORY STATISTICS", "📊"),
             color = 0x9B59B6, -- Lila
             fields = {},
             footer = {
