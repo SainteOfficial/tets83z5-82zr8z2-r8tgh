@@ -3590,7 +3590,12 @@ Utilities.SendInventoryWebhook = function()
             -- Create a fallback warning message
             backpackItems = {}
         else
-            backpackItems = getBackpackError or {}
+            -- Das Problem ist, dass getBackpackError hier eigentlich das Ergebnis der Funktion ist, nicht ein Fehler
+            backpackItems = getBackpackError
+            if type(backpackItems) ~= "table" then
+                backpackItems = {}
+                warn("Backpack items is not a table, using empty table instead")
+            end
         end
         
         -- Prepare to categorize items
@@ -3603,6 +3608,13 @@ Utilities.SendInventoryWebhook = function()
                 data = itemData,
                 info = ItemsWithId[itemId]
             }
+            
+            -- Verbesserte Fehlerprüfung
+            if type(item.info) ~= "table" then
+                -- Item existiert nicht in der ItemsWithId Tabelle
+                warn("Item with ID " .. tostring(itemId) .. " not found in ItemsWithId")
+                item.info = {category = "MISC", name = "Unknown Item"}
+            end
             
             if item.info and item.info.category then
                 local categoryName = item.info.category
@@ -3758,6 +3770,12 @@ Utilities.SendInventoryWebhook = function()
                 -- Group items
                 local groupedItems = {}
                 for _, item in ipairs(items) do
+                    -- Verbesserte Fehlerprüfung
+                    if not item or type(item) ~= "table" or not item.info or type(item.info) ~= "table" or not item.info.name then
+                        warn("Invalid item found, skipping...")
+                        goto continue
+                    end
+                    
                     if not groupedItems[item.info.name] then
                         groupedItems[item.info.name] = {
                             count = 0,
@@ -3766,10 +3784,17 @@ Utilities.SendInventoryWebhook = function()
                         }
                     end
                     
+                    -- Sicherstellen, dass item.data existiert
+                    if not item.data or type(item.data) ~= "table" then
+                        item.data = {quantity = 1, equipped = false}
+                    end
+                    
                     groupedItems[item.info.name].count = groupedItems[item.info.name].count + (item.data.quantity or 1)
                     if item.data.equipped then
                         groupedItems[item.info.name].equipped = true
                     end
+                    
+                    ::continue::
                 end
                 
                 -- Convert to sorted array
@@ -3779,9 +3804,19 @@ Utilities.SendInventoryWebhook = function()
                 end
                 
                 -- Sort by name
-                table.sort(sortedItems, function(a, b)
-                    return a.item.info.name < b.item.info.name
+                local sortSuccess, sortError = pcall(function()
+                    table.sort(sortedItems, function(a, b)
+                        -- Verbesserte Fehlerprüfung für die Sortierung
+                        if not a or not a.item or not a.item.info or not a.item.info.name then return false end
+                        if not b or not b.item or not b.item.info or not b.item.info.name then return true end
+                        
+                        return tostring(a.item.info.name) < tostring(b.item.info.name)
+                    end)
                 end)
+                
+                if not sortSuccess then
+                    warn("Failed to sort items: " .. tostring(sortError))
+                end
                 
                 -- Create fields with max 20 items per field
                 local maxItemsPerField = 20
@@ -3833,6 +3868,13 @@ Utilities.SendInventoryWebhook = function()
             -- Create a nicer webhook title
             local currentDate = os.date("%m/%d/%Y", os.time())
             local webhookContent = "## 📋 MythHub Inventory Report - " .. currentDate .. "\n"
+            
+            -- Verbesserte Fehlerprüfung für itemCount
+            if type(itemCount) ~= "number" then
+                warn("itemCount is not a number, type: " .. type(itemCount))
+                itemCount = 0
+            end
+            
             webhookContent = webhookContent .. "Player: " .. maskedUsername .. " | Items: " .. tostring(itemCount)
             
             -- Improved webhook message with avatar and username
@@ -3871,6 +3913,20 @@ Utilities.SendInventoryWebhook = function()
                 local response
                 
                 if fileData then
+                    -- Verbesserte Fehlerbehandlung für den JSON-Encode im multipart-Request
+                    local jsonEncodeMultipartSuccess, jsonBodyMultipart = pcall(function()
+                        return HttpService:JSONEncode({
+                            username = "MythHub Inventory System",
+                            content = webhookContent,
+                            embeds = embeds
+                        })
+                    end)
+                    
+                    if not jsonEncodeMultipartSuccess then
+                        warn("Failed to encode JSON for multipart webhook: " .. tostring(jsonBodyMultipart))
+                        return false
+                    end
+                    
                     response = httpRequest({
                         Url = url,
                         Method = method,
@@ -3880,11 +3936,7 @@ Utilities.SendInventoryWebhook = function()
                         Body = "---------------------------boundary\r\n" ..
                               'Content-Disposition: form-data; name="payload_json"\r\n' ..
                               "Content-Type: application/json\r\n\r\n" ..
-                              HttpService:JSONEncode({
-                                  username = "MythHub Inventory System",
-                                  content = webhookContent,
-                                  embeds = embeds
-                              }) .. "\r\n" ..
+                              jsonBodyMultipart .. "\r\n" ..
                               "---------------------------boundary\r\n" ..
                               'Content-Disposition: form-data; name="file"; filename="MYTHLOGO.png"\r\n' ..
                               "Content-Type: image/png\r\n\r\n" ..
@@ -3892,6 +3944,21 @@ Utilities.SendInventoryWebhook = function()
                               "---------------------------boundary--\r\n"
                     })
                 else
+                    -- Verbesserte Fehlerbehandlung für den JSON-Encode
+                    local jsonEncodeSuccess, jsonBody = pcall(function()
+                        return HttpService:JSONEncode({
+                            username = "MythHub Inventory System",
+                            avatar_url = "https://i.imgur.com/jVJ9q32.png", -- Fallback
+                            content = webhookContent,
+                            embeds = embeds
+                        })
+                    end)
+                    
+                    if not jsonEncodeSuccess then
+                        warn("Failed to encode JSON for webhook: " .. tostring(jsonBody))
+                        return false
+                    end
+                    
                     -- Fallback ohne Dateianhang
                     response = httpRequest({
                         Url = url,
@@ -3899,12 +3966,7 @@ Utilities.SendInventoryWebhook = function()
                         Headers = {
                             ["Content-Type"] = "application/json"
                         },
-                        Body = HttpService:JSONEncode({
-                            username = "MythHub Inventory System",
-                            avatar_url = "https://i.imgur.com/jVJ9q32.png", -- Fallback
-                            content = webhookContent,
-                            embeds = embeds
-                        })
+                        Body = jsonBody
                     })
                 end
                 
