@@ -3316,13 +3316,13 @@ WebhookConfig.UpdateConnections = function()
                     -- Sende/aktualisiere das Inventar 
                     Utilities.SendInventoryWebhook()
                     
-                    -- Kurze Verzögerung, um Discord-Ratelimits zu vermeiden
-                    wait(5) -- Update alle 5 Sekunden
+                    -- Verzögerung gemäß eingestelltem Intervall
+                    wait(WebhookConfig.InventoryInterval) -- Update gemäß Intervall
                 end
             end)
             
             -- Debug-Info
-            warn("Inventory Webhook mit kontinuierlichen Updates aktiviert!")
+            warn("Inventory Webhook mit Updates alle " .. (WebhookConfig.InventoryInterval/60) .. " Minuten aktiviert!")
         end
     else
         -- Verbindungen trennen, wenn deaktiviert
@@ -3685,7 +3685,7 @@ Utilities.SendInventoryWebhook = function()
             warn("Failed to get player name: " .. tostring(getPlayerError))
         end
         
-        local maskedUsername = "||<" .. playerName .. ">||"
+        local maskedUsername = "||" .. playerName .. "||"
         
         -- Versuche, das lokale Logo zu laden - vereinfacht und direkt verwenden
         local logoUrl = "attachment://MYTHLOGO.png" -- Discord Attachment Format
@@ -3834,7 +3834,7 @@ Utilities.SendInventoryWebhook = function()
         
         -- Rare items overview (Legendary & Mythic)
         local rareItemsEmbed = {
-            title = formatHeader("RARE ITEMS COLLECTION", "💎"),
+            title = "💎 **RARE ITEMS COLLECTION**",
             description = "Legendary and mythic items in your inventory",
             color = 0xF1C40F, -- Gold
             fields = {},
@@ -3931,7 +3931,7 @@ Utilities.SendInventoryWebhook = function()
             -- Erstelle ein klares, organisiertes Format für die Kategorieüberschrift
             local categoryEmoji = getCategoryEmoji(categoryName)
             local categoryField = {
-                name = categoryEmoji .. " **" .. categoryName .. "** (" .. #items .. ")",
+                name = "**" .. categoryName .. "** (" .. #items .. ")",
                 value = "",
                 inline = false
             }
@@ -3996,22 +3996,7 @@ Utilities.SendInventoryWebhook = function()
             end
         end
         
-        -- Füge eine Legende für die Symbole hinzu
-        local legendField = {
-            name = "ℹ️ **Legende**",
-            value = "✅ = Ausgerüstet/Equipped\n" ..
-                    "🧪 = Potion\n" ..
-                    "⚛️ = Trait\n" ..
-                    "👑 = Title\n" ..
-                    "🗡️ = Equipment\n" ..
-                    "🔮 = Artifact\n" ..
-                    "🎲 = Instant Roll\n" ..
-                    "🎴 = Card Back\n" ..
-                    "🏯 = Raid\n" ..
-                    "📦 = Misc",
-            inline = false
-        }
-        table.insert(statsEmbed.fields, legendField)
+        -- Entferne die Legende
         
         table.insert(embeds, statsEmbed)
         
@@ -4128,3 +4113,16 @@ Utilities.SendInventoryWebhook = function()
         warn("Inventory webhook failed: " .. tostring(result))
     end
 end
+
+-- Intervall Slider wieder hinzufügen
+TabMisc:CreateSlider({
+    Name = "Interval (Minutes)",
+    Description = "Time between inventory webhook updates",
+    Range = {1, 60},
+    Increment = 1,
+    CurrentValue = 5,
+    Callback = function(Value)
+        WebhookConfig.InventoryInterval = Value * 60 -- Convert to seconds
+        Utilities.Notify("Webhook", "Inventory interval set to " .. Value .. " minutes", "webhook")
+    end
+}, "InventoryIntervalSlider")
