@@ -2870,9 +2870,9 @@ TabMisc:CreateToggle({
 }, "AutoReconnectToggle")
 
 TabMisc:CreateDivider()
-TabMisc:CreateSection("Webhook Benachrichtigungen")
+TabMisc:CreateSection("Webhook Notifications")
 
--- Webhook Konfiguration
+-- Webhook Configuration
 local WebhookConfig = {
     Enabled = false,
     URL = "",
@@ -2880,14 +2880,13 @@ local WebhookConfig = {
     NotifyBossFights = true,
     NotifyTowerCompletion = true,
     NotifyRaidCompletion = true,
-    MinimumRarity = "legendary", -- common, rare, epic, legendary, mythic
     Connections = {}
 }
 
 -- Webhook URL Input
 local webhook_url_input = TabMisc:CreateInput({
     Name = "Discord Webhook URL",
-    Description = "Gib die Discord Webhook URL ein",
+    Description = "Enter the Discord Webhook URL",
     PlaceholderText = "https://discord.com/api/webhooks/...",
     CurrentValue = "",
     Numeric = false,
@@ -2895,21 +2894,21 @@ local webhook_url_input = TabMisc:CreateInput({
     Enter = true,
     Callback = function(Text)
         WebhookConfig.URL = Text
-        Utilities.Notify("Webhook", "Webhook URL gespeichert", "webhook")
+        Utilities.Notify("Webhook", "Webhook URL saved", "webhook")
     end
 }, "WebhookURL")
 
 -- Webhook Toggle
 local webhook_toggle = TabMisc:CreateToggle({
-    Name = "Webhook Benachrichtigungen aktivieren",
-    Description = "Aktiviert Benachrichtigungen über den konfigurierten Webhook",
+    Name = "Enable Webhook Notifications",
+    Description = "Activates notifications via the configured webhook",
     CurrentValue = false,
     Callback = function(Value)
         WebhookConfig.Enabled = Value
         
         if Value then
             if WebhookConfig.URL == "" then
-                Utilities.Notify("Webhook", "Bitte zuerst eine Webhook URL eingeben", "error")
+                Utilities.Notify("Webhook", "Please enter a webhook URL first", "error")
                 return false
             end
             
@@ -2918,10 +2917,10 @@ local webhook_toggle = TabMisc:CreateToggle({
                 username = "MythHub",
                 embeds = {{
                     title = "Webhook Test",
-                    description = "Die Webhook-Verbindung wurde erfolgreich hergestellt!",
-                    color = 5814783, -- Blau in Dezimal
+                    description = "The webhook connection was established successfully!",
+                    color = 5814783, -- Blue in decimal
                     fields = {{
-                        name = "Spieler",
+                        name = "Player",
                         value = Utilities.GetLocalPlayer().Name,
                         inline = true
                     }, {
@@ -2936,17 +2935,17 @@ local webhook_toggle = TabMisc:CreateToggle({
                 }}
             })
             
-            Utilities.Notify("Webhook", "Webhook Benachrichtigungen aktiviert", "webhook")
+            Utilities.Notify("Webhook", "Webhook notifications enabled", "webhook")
         else
-            Utilities.Notify("Webhook", "Webhook Benachrichtigungen deaktiviert", "webhook")
+            Utilities.Notify("Webhook", "Webhook notifications disabled", "webhook")
         end
     end
 }, "WebhookToggle")
 
--- Benachrichtigungsoptionen
+-- Notification options
 TabMisc:CreateToggle({
-    Name = "Bei seltenen Drops benachrichtigen",
-    Description = "Sendet eine Benachrichtigung, wenn ein seltenes Item gedroppt wird",
+    Name = "Notify on Item Drops",
+    Description = "Sends a notification when an item is dropped",
     CurrentValue = true,
     Callback = function(Value)
         WebhookConfig.NotifyRareDrops = Value
@@ -2954,8 +2953,8 @@ TabMisc:CreateToggle({
 }, "WebhookRareDrops")
 
 TabMisc:CreateToggle({
-    Name = "Bei Boss-Kämpfen benachrichtigen",
-    Description = "Sendet eine Benachrichtigung, wenn ein Boss-Kampf beginnt",
+    Name = "Notify on Boss Fights",
+    Description = "Sends a notification when a boss fight starts",
     CurrentValue = true,
     Callback = function(Value)
         WebhookConfig.NotifyBossFights = Value
@@ -2963,8 +2962,8 @@ TabMisc:CreateToggle({
 }, "WebhookBossFights")
 
 TabMisc:CreateToggle({
-    Name = "Bei Tower-Abschluss benachrichtigen",
-    Description = "Sendet eine Benachrichtigung, wenn ein Tower abgeschlossen wurde",
+    Name = "Notify on Tower Completion",
+    Description = "Sends a notification when a tower is completed",
     CurrentValue = true,
     Callback = function(Value)
         WebhookConfig.NotifyTowerCompletion = Value
@@ -2972,26 +2971,13 @@ TabMisc:CreateToggle({
 }, "WebhookTowerCompletion")
 
 TabMisc:CreateToggle({
-    Name = "Bei Raid-Abschluss benachrichtigen",
-    Description = "Sendet eine Benachrichtigung, wenn ein Raid abgeschlossen wurde",
+    Name = "Notify on Raid Completion",
+    Description = "Sends a notification when a raid is completed",
     CurrentValue = true,
     Callback = function(Value)
         WebhookConfig.NotifyRaidCompletion = Value
     end
 }, "WebhookRaidCompletion")
-
--- Rarity Dropdown
-local rarity_dropdown = TabMisc:CreateDropdown({
-    Name = "Minimale Drop-Seltenheit",
-    Description = "Bei welcher Seltenheit soll benachrichtigt werden",
-    Options = {"common", "rare", "epic", "legendary", "mythic"},
-    CurrentOption = {"legendary"},
-    MultipleOptions = false,
-    SpecialType = nil,
-    Callback = function(Option)
-        WebhookConfig.MinimumRarity = Option[1]
-    end
-}, "WebhookRarity")
 
 -- Function to send webhook notifications
 Utilities.SendWebhook = function(data)
@@ -3031,23 +3017,23 @@ spawn(function()
     while wait(1) do
         if WebhookConfig.Enabled and WebhookConfig.NotifyBossFights then
             if Utilities.IsInBattle() then
-                -- Prüfe, ob wir gegen einen Boss kämpfen
+                -- Check if we're fighting a boss
                 local localPlayer = Utilities.GetLocalPlayer()
                 if localPlayer and localPlayer.PlayerGui then
                     local battleGui = localPlayer.PlayerGui:FindFirstChild("battle")
                     if battleGui then
-                        -- Versuche, den Namen des Gegners zu ermitteln
-                        local enemyName = "Unbekannter Boss"
+                        -- Try to determine the enemy name
+                        local enemyName = "Unknown Boss"
                         pcall(function()
-                            -- Der genaue Pfad zum Namen des Gegners kann variieren
-                            -- Je nach UI-Struktur im Spiel
+                            -- The exact path to the enemy name may vary
+                            -- Depending on the UI structure in the game
                             local nameLabel = battleGui:FindFirstChild("EnemyName", true)
                             if nameLabel and nameLabel:IsA("TextLabel") then
                                 enemyName = nameLabel.Text
                             end
                         end)
                         
-                        -- Prüfe, ob es sich um einen Boss handelt
+                        -- Check if it's a boss
                         local isBoss = false
                         for _, bossName in pairs(AutoFarmConfig.WorldBosses) do
                             if string.find(enemyName:lower(), bossName:lower()) then
@@ -3057,19 +3043,19 @@ spawn(function()
                         end
                         
                         if isBoss then
-                            -- Sende Webhook-Benachrichtigung für Boss-Kampf
+                            -- Send webhook notification for boss fight
                             Utilities.SendWebhook({
                                 username = "MythHub",
                                 embeds = {{
-                                    title = "Boss-Kampf Begonnen",
-                                    description = "Ein Boss-Kampf hat begonnen!",
-                                    color = 15158332, -- Rot in Dezimal
+                                    title = "Boss Fight Started",
+                                    description = "A boss fight has begun!",
+                                    color = 15158332, -- Red in decimal
                                     fields = {{
                                         name = "Boss",
                                         value = enemyName,
                                         inline = true
                                     }, {
-                                        name = "Spieler",
+                                        name = "Player",
                                         value = localPlayer.Name,
                                         inline = true
                                     }},
@@ -3080,7 +3066,7 @@ spawn(function()
                                 }}
                             })
                             
-                            -- Warte eine Weile, um wiederholte Benachrichtigungen zu vermeiden
+                            -- Wait a while to avoid repeated notifications
                             wait(30)
                         end
                     end
@@ -3213,7 +3199,7 @@ local function checkTowerCompletion()
     end
 end
 
--- Raid Completion Erkennung
+-- Raid Completion Detection
 local function connectRaidCompletion()
     if WebhookConfig.Connections.RaidCompletion then
         WebhookConfig.Connections.RaidCompletion:Disconnect()
@@ -3222,19 +3208,19 @@ local function connectRaidCompletion()
     WebhookConfig.Connections.RaidCompletion = game:GetService("Players").LocalPlayer.PlayerGui.ChildAdded:Connect(function(child)
         if WebhookConfig.Enabled and WebhookConfig.NotifyRaidCompletion then
             if child.Name == "battle-end" then
-                wait(1) -- Kurz warten, bis GUI vollständig geladen ist
+                wait(1) -- Wait briefly for GUI to fully load
                 
-                -- Versuche zu ermitteln, ob es ein Raid war
+                -- Try to determine if it was a raid
                 local wasRaid = false
-                local raidBoss = "Unbekannt"
+                local raidBoss = "Unknown"
                 
                 pcall(function()
-                    -- Überprüfe Battle-End GUI auf Hinweise auf einen Raid
+                    -- Check Battle-End GUI for indicators of a raid
                     if child:FindFirstChild("RaidRewards", true) or 
                        child:FindFirstChild("DragonRewards", true) then
                         wasRaid = true
                         
-                        -- Versuche, den Raid-Boss-Namen zu ermitteln
+                        -- Try to determine the raid boss name
                         local bossNameLabel = child:FindFirstChild("BossName", true)
                         if bossNameLabel and bossNameLabel:IsA("TextLabel") then
                             raidBoss = bossNameLabel.Text
@@ -3243,19 +3229,19 @@ local function connectRaidCompletion()
                 end)
                 
                 if wasRaid then
-                    -- Sende Webhook-Benachrichtigung für abgeschlossenen Raid
+                    -- Send webhook notification for completed raid
                     Utilities.SendWebhook({
                         username = "MythHub",
                         embeds = {{
-                            title = "Raid abgeschlossen!",
-                            description = "Ein Raid wurde erfolgreich abgeschlossen!",
-                            color = 16766720, -- Gold in Dezimal
+                            title = "Raid Completed!",
+                            description = "A raid has been successfully completed!",
+                            color = 16766720, -- Gold in decimal
                             fields = {{
                                 name = "Boss",
                                 value = raidBoss,
                                 inline = true
                             }, {
-                                name = "Spieler",
+                                name = "Player",
                                 value = Utilities.GetLocalPlayer().Name,
                                 inline = true
                             }},
@@ -3286,17 +3272,17 @@ WebhookConfig.UpdateConnections = function()
         -- Check if inventory webhook is enabled with continuous updates
         if WebhookConfig.InventorySendEnabled and not WebhookConfig.Connections.InventorySender then
             WebhookConfig.Connections.InventorySender = spawn(function()
-                while WebhookConfig.InventorySendEnabled do
-                    -- Send/update the inventory
-                    Utilities.SendInventoryWebhook()
+                while WebhookConfig.InventorySendEnabled and WebhookConfig.Enabled do
+                    -- Send/update the inventory immediately
+                    pcall(Utilities.SendInventoryWebhook)
                     
-                    -- Delay according to configured interval
-                    wait(WebhookConfig.InventoryInterval) -- Update according to interval
+                    -- Debug info - we can see this in the output
+                    warn("Sending inventory webhook update - next update in " .. (WebhookConfig.InventoryInterval/60) .. " minutes")
+                    
+                    -- Wait the configured interval before next update
+                    wait(WebhookConfig.InventoryInterval) 
                 end
             end)
-            
-            -- Debug info
-            warn("Inventory Webhook enabled with updates every " .. (WebhookConfig.InventoryInterval/60) .. " minutes!")
         end
     else
         -- Disconnect connections when disabled
@@ -3311,8 +3297,7 @@ WebhookConfig.UpdateConnections = function()
         end
         
         if WebhookConfig.Connections.InventorySender then
-            WebhookConfig.Connections.InventorySender:Disconnect()
-            WebhookConfig.Connections.InventorySender = nil
+            WebhookConfig.Connections.InventorySender = nil -- It's a thread, not a connection
         end
     end
 end
@@ -3447,7 +3432,7 @@ TabMisc:CreateToggle({
     end
 }, "InventoryWebhookToggle")
 
--- Intervall Slider wieder hinzufügen
+-- Interval Slider
 TabMisc:CreateSlider({
     Name = "Interval (Minutes)",
     Description = "Time between inventory webhook updates",
@@ -3460,7 +3445,7 @@ TabMisc:CreateSlider({
     end
 }, "InventoryIntervalSlider")
 
--- Button zum sofortigen Senden
+-- Button to send immediately
 TabMisc:CreateButton({
     Name = "Send Inventory Now",
     Description = "Immediately sends your current inventory via webhook",
@@ -3835,31 +3820,31 @@ Utilities.SendInventoryWebhook = function()
             end
         end
         
-        -- Versende Webhook mit verbessertem Design
+        -- Send webhook with improved design
         local HttpService = game:GetService("HttpService")
         local httpRequest = (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request) or request
         
         if httpRequest then
-            -- Discord erlaubt maximal 10 Embeds pro Nachricht
+            -- Discord allows maximum 10 embeds per message
             if #embeds > 10 then
                 embeds = {table.unpack(embeds, 1, 10)}
             end
             
-            -- Erstelle einen schöneren Webhook-Titel
+            -- Create a nicer webhook title
             local currentDate = os.date("%m/%d/%Y", os.time())
             local webhookContent = "## 📋 MythHub Inventory Report - " .. currentDate .. "\n"
             webhookContent = webhookContent .. "Player: " .. maskedUsername .. " | Items: " .. itemCount
             
-            -- Verbesserte Webhook-Nachricht mit Avatar und Benutzername
-            -- Fügt die Datei direkt als Anhang hinzu
+            -- Improved webhook message with avatar and username
+            -- Add the file directly as an attachment
             local fileData
             
-            -- Verbesserte Fehlerbehandlung für die Logo-Datei
+            -- Improved error handling for the logo file
             local readSuccess, readResult = pcall(function()
                 if isfile and readfile and isfile("MYTHLOGO.png") then
                     return readfile("MYTHLOGO.png")
                 elseif getsynasset and readfile and isfile("MYTHLOGO.png") then
-                    -- Alternative für Synapse X
+                    -- Alternative for Synapse X
                     return readfile("MYTHLOGO.png") 
                 end
                 return nil
@@ -3868,18 +3853,18 @@ Utilities.SendInventoryWebhook = function()
             if readSuccess and readResult then
                 fileData = readResult
             else
-                warn("Logo-Datei konnte nicht gelesen werden. Verwende alternatives Logo.")
+                warn("Logo file could not be read. Using alternative logo.")
             end
             
-            -- HTTP Request mit Dateianhang (falls verfügbar)
+            -- HTTP Request with file attachment (if available)
             local requestSuccess, requestError = pcall(function()
-                -- Webhook-URL und Methode vorbereiten
-                local method = "POST"  -- Standard: Neue Nachricht erstellen
+                -- Prepare webhook URL and method
+                local method = "POST"  -- Default: Create new message
                 local url = WebhookConfig.URL
                 
-                -- Wenn bereits eine Message-ID gespeichert ist, aktualisiere diese statt eine neue zu senden
+                -- If a message ID is already saved, update it instead of sending a new one
                 if WebhookConfig.LastMessageID then
-                    method = "PATCH"  -- PATCH zum Aktualisieren einer existierenden Nachricht
+                    method = "PATCH"  -- PATCH to update an existing message
                     url = WebhookConfig.URL .. "/messages/" .. WebhookConfig.LastMessageID
                 end
                 
@@ -3955,3 +3940,4 @@ spawn(function()
         pcall(checkTowerCompletion)
     end
 end)
+
